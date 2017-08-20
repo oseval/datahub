@@ -1,5 +1,7 @@
 package ru.oseval.dnotifier
 
+import scala.reflect.ClassTag
+
 object Data {
   sealed trait DataMessage
   case class GetDifferenceFrom(entityId: String, dataClock: String) extends DataMessage
@@ -14,7 +16,7 @@ object Data {
 /**
   * Idempotent (due to [[Data.clock]] and commutative (due to [[DataOps.ordering]]) data model.
   */
-trait Data { self ⇒
+trait Data {
   val clock: String
 }
 
@@ -23,12 +25,16 @@ trait Data { self ⇒
   * To make it associative and found gaps it has [[NotAssociativeData.previousId]].
   */
 trait NotAssociativeData extends Data {
-  val previousId: String
+  val previousClock: String
+  def isCombinableTo[D <: NotAssociativeData](that: D, other: D): Boolean = other.previousClock == that.clock
 }
 
-trait DataOps {
-  type DInner <: Data
+abstract class DataOps[D <: Data] {
   val ordering: Ordering[String]
+  /**
+   * Data which is initial state for all such entities
+   */
+  val zero: D
 
   /**
     * Combines two data objects to one
@@ -36,7 +42,7 @@ trait DataOps {
     * @param b
     * @return
     */
-  def combine(a: DInner, b: DInner): DInner
+  def combine(a: D, b: D): D
 
   /**
     * Computes diff between `a` and older state with a `from` id
@@ -44,17 +50,14 @@ trait DataOps {
     * @param from
     * @return
     */
-  def diffFromClock(a: DInner, from: String): DInner
-
-  /**
-    * Zero data.
-    */
-  val zero: DInner
+  def diffFromClock(a: D, from: String): D
 
   /**
     * Returns the entity ids which related to a specified data
     * @param data
     * @return
     */
-  def getRelatedEntities(data: DInner): Set[String]
+  def getRelations(data: D): Set[String]
+
+  def makeId(ownId: Any): String
 }

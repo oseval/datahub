@@ -19,25 +19,18 @@ object User {
 
   case class UserData(name: String, clock: String) extends Data
 
-  object UserOps extends DataOps {
-    override type DInner = UserData
+  object UserOps extends DataOps[UserData] {
     override val ordering: Ordering[String] = Data.timestampOrdering
     override val zero: UserData = UserData("", "0")
     override def combine(a: UserData, b: UserData): UserData =
       if (ordering.gt(a.clock, b.clock)) a else b
 
     override def diffFromClock(a: UserData, from: String): UserData = a
-    override def getRelatedEntities(data: UserData): Set[String] = Set.empty
-}
-  class UserEntity(override val id: String,
-                   override val notifyDataUpdated: (Notifier.NotifyDataUpdated) => Future[Unit],
-                   initialData: UserData
-                  ) extends AbstractEntity(initialData) {
-    override val ops: UserOps.type = UserOps
+    override def getRelations(data: UserData): Set[String] = Set.empty
   }
 
-  case class UserFacade(id: String, holder: ActorRef) extends ActorFacade {
-    override val ops: UserOps.type = UserOps
+  case class UserEntity(id: String) extends Entity {
+    override val ops = UserOps
   }
 }
 
@@ -45,10 +38,11 @@ private class UserActor(id: Long, name: String, notifier: ActorRef) extends Acto
   import context.dispatcher
 
   private implicit val timeout: Timeout = 3.seconds
-  private val entityId = "user_" + id
-  private val user = new UserEntity(entityId, notifier.ask(_).mapTo[Unit], UserData(name, System.currentTimeMillis.toString))
+  private val user = UserEntity("user_" + id)
+  private val storage = new LocalDataStorage(ActorFacade(_, self), notifier.ask(_).mapTo[Unit])
 
-  notifier ! Register(UserFacade(entityId, self))
+  storage.addEntity(user)
+  storage.combine(user, UserData(name, System.currentTimeMillis.toString))
 
   override def receive: Receive = handleDataMessage(user) orElse {
     case ChangeName(n) => user.combine(UserData(n, System.currentTimeMillis.toString)) pipeTo sender()

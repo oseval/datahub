@@ -35,9 +35,11 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
     productHolder ! Ping
     expectMsg(Pong)
     val product = ProductData("Product name", 1, System.currentTimeMillis)
+    val zero = ProductData("", 0, 0L)
 
-    productHolder ! GetDifferenceFrom(productId, ProductOps.zero.clock)
-    expectMsgType[ProductData] shouldEqual ProductOps.zero
+    productHolder ! GetDifferenceFrom(productId, "0")
+
+    expectMsgType[ProductData] shouldEqual zero
 
     productHolder ! UpdateData(product)
     val dup = notifier.expectMsgType[NotifyDataUpdated]
@@ -45,7 +47,7 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
     notifier.lastSender ! ()
     expectMsgType[Unit]
 
-    productHolder ! GetDifferenceFrom(productId, ProductOps.zero.clock)
+    productHolder ! GetDifferenceFrom(productId, zero.clock)
     expectMsgType[ProductData] shouldEqual product
   }
 

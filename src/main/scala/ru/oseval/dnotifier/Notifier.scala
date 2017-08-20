@@ -12,14 +12,16 @@ import scala.concurrent.duration._
 
 object Notifier {
   trait Storage {
-    def register(entityId: String, dataId: String): Future[Unit]
-    def change(entityId: String, dataId: String): Future[Unit]
-    def getLastId(entityId: String): Future[String]
+    def register(entityId: String, dataClock: String): Future[Unit]
+    def change(entityId: String, dataClock: String): Future[Unit]
+    def getLastId(entityId: String): Future[Option[String]]
   }
 
   private[dnotifier] sealed trait NotifierMessage
-  private[dnotifier] case class Register(dataFacade: EntityFacade,
-                                         relatedFacades: Map[String, String] = Map.empty) extends NotifierMessage
+  private[dnotifier] case class Register[D <: Data](dataFacade: EntityFacade[D],
+                                                    lastClock: String,
+                                                    relationClocks: Map[String, String]) extends NotifierMessage
+  // TODO: add added and removed relations with their clocks?
   private[dnotifier] case class NotifyDataUpdated(entityId: String, data: Data) extends NotifierMessage
 
   def props(storage: Storage): Props = Props(classOf[Notifier], storage)
@@ -31,7 +33,7 @@ private class Notifier(storage: Storage) extends Actor with ActorLogging {
   import context.dispatcher
   private implicit val timeout: Timeout = 3.seconds
 
-  private val facades = mutable.Map.empty[String, EntityFacade]
+  private val facades = mutable.Map.empty[String, EntityFacade[Data]]
   private val subscriptions = mutable.Map.empty[String, Set[String]] // facade -> subscriptions
   private val reverseSubscriptions = mutable.Map.empty[String, Set[String]] // facade -> related
 
@@ -45,42 +47,49 @@ private class Notifier(storage: Storage) extends Actor with ActorLogging {
     .queue[DataTask](1000, OverflowStrategy.dropHead)
     .mapAsyncUnordered(100) { case DataTask(facade, relatedId, relatedData) ⇒
       facade.onUpdate(relatedId, relatedData).recover { case e =>
-        log.error(e, "Failed to send about update {} of related {} to facade {}", relatedData.clock, relatedId, facade.id)
+        log.error(e, "Failed to send about update {} of related {} to facade {}", relatedData.clock, relatedId, facade.entity.id)
       }
     }
     .to(Sink.ignore)
     .run
 
-  case class DataTask(facade: EntityFacade, relatedId: String, relatedData: Data)
+  case class DataTask(facade: EntityFacade[Data], relatedId: String, relatedData: Data)
 
   override def receive: Receive = {
-    case Register(facade, relatedFacades) ⇒
+    case Register(facade, lastClock, relationClocks) ⇒
       // if facade is not registered then the facades subscribed to them
       // need to be notified about last data if id bigger then their own
-      facades += (facade.id → facade)
+      facades += (facade.entity.id → facade)
 
-      storage.register(facade.id, facade.ops.zero.clock).map { _ ⇒
-        reverseSubscriptions.update(
-          facade.id,
-          reverseSubscriptions.getOrElse(facade.id, Set.empty) ++ relatedFacades.keySet
+      reverseSubscriptions.update(
+        facade.entity.id,
+        reverseSubscriptions.getOrElse(facade.entity.id, Set.empty) ++ relationClocks.keySet
+      )
+
+      relationClocks.foreach { case (id, clock) => subscribe(facade, id, Some(clock)) }
+
+      storage.getLastId(facade.entity.id).flatMap { lastStoredClockOpt =>
+        lastStoredClockOpt.foreach(lastStoredClock =>
+          if (facade.entity.ops.ordering.gt(lastClock, lastStoredClock))
+            // TODO: requiredUpatesFrom? new method to notify all subscribers about update
+            facade.getUpdatesFrom(lastStoredClock)
         )
-
-        relatedFacades.foreach { case (id, clock) => subscribe(facade, id, Some(clock)) }
+        storage.register(facade.entity.id, lastClock)
       } pipeTo sender()
 
-    case NotifyDataUpdated(entityId, data) ⇒
-      facades.get(entityId) match {
-        case Some(facade) ⇒
+    case NotifyDataUpdated(entityId, d) ⇒
+      facades.get(entityId).map((_, d)) match {
+        case Some(EntityFacade(facade, data)) ⇒
           // who subscribed on that facade
           subscriptions
-            .getOrElse(facade.id, Set.empty)
+            .getOrElse(facade.entity.id, Set.empty)
             .flatMap(facades.get)
             .foreach(sendChangeToOne(_, entityId, data))
 
           // the facades on which that facade depends
-          val relatedFacades = facade.ops.getRelatedEntities(data.asInstanceOf[facade.ops.DInner])
+          val relatedFacades = facade.entity.ops.getRelations(data)
           val removed = reverseSubscriptions.getOrElse(entityId, Set.empty) -- relatedFacades
-          val added = relatedFacades -- reverseSubscriptions.getOrElse(facade.id, Set.empty)
+          val added = relatedFacades -- reverseSubscriptions.getOrElse(facade.entity.id, Set.empty)
 
           removed.foreach(unsubscribe(facade, _))
           added.foreach(subscribe(facade, _, None))
@@ -90,9 +99,12 @@ private class Notifier(storage: Storage) extends Actor with ActorLogging {
         case None ⇒
           sender() ! Status.Failure(new Exception("Facade with id=" + entityId + " is not registered"))
       }
+
+//    case SyncWithRelated(entityId, relatedId, relatedClock) ⇒
+
   }
 
-  private def sendChangeToOne(to: EntityFacade, relatedId: String, relatedData: Data): Future[Unit] =
+  private def sendChangeToOne(to: EntityFacade[Data], relatedId: String, relatedData: Data): Future[Unit] =
     queueOffer(DataTask(to, relatedId, relatedData))
 
   protected def queueOffer(task: DataTask): Future[Unit] = {
@@ -107,27 +119,25 @@ private class Notifier(storage: Storage) extends Actor with ActorLogging {
     }
   }
 
-  private def subscribe(facade: EntityFacade, relatedId: String, lastKnownDataClockOpt: Option[String]): Unit = {
+  private def subscribe(facade: EntityFacade[Data], relatedId: String, lastKnownDataClockOpt: Option[String]): Unit = {
     val relatedSubscriptions = subscriptions.getOrElse(relatedId, Set.empty)
-    subscriptions.update(relatedId, relatedSubscriptions + facade.id)
-    reverseSubscriptions.update(facade.id, reverseSubscriptions.getOrElse(facade.id, Set.empty) + relatedId)
+    subscriptions.update(relatedId, relatedSubscriptions + facade.entity.id)
+    reverseSubscriptions.update(facade.entity.id, reverseSubscriptions.getOrElse(facade.entity.id, Set.empty) + relatedId)
 
-    facades.get(relatedId).map { related =>
-      val lastKnownDataClock = lastKnownDataClockOpt.getOrElse(related.ops.zero.clock)
-      log.debug("Subscribe entity {} on {} with last known data id {}", facade.id, relatedId, lastKnownDataClock)
+    facades.get(relatedId).foreach { related =>
+      log.debug("Subscribe entity {} on {} with last known data id {}", facade.entity.id, relatedId, lastKnownDataClockOpt)
 
-      storage.getLastId(relatedId).map { lastId =>
-        if (!related.ops.ordering.equiv(lastId, lastKnownDataClock))
-          related
-            .getUpdatesFrom(lastKnownDataClock)
-            .map(sendChangeToOne(facade, relatedId, _))
-      }
+      storage.getLastId(relatedId).foreach(_.foreach { lastClock =>
+        val lastKnownDataClock = lastKnownDataClockOpt getOrElse related.entity.ops.zero.clock
+        if (!related.entity.ops.ordering.equiv(lastClock, lastKnownDataClock))
+          related.getUpdatesFrom(lastKnownDataClock).foreach(sendChangeToOne(facade, relatedId, _))
+      })
     }
   }
 
-  private def unsubscribe(facade: EntityFacade, relatedId: String): Unit = {
-    log.debug("Unsubscribe entity {} from related {}", facade.id, relatedId)
-    val newRelatedSubscriptions = subscriptions.getOrElse(facade.id, Set.empty) - facade.id
+  private def unsubscribe(facade: EntityFacade[Data], relatedId: String): Unit = {
+    log.debug("Unsubscribe entity {} from related {}", facade.entity.id, relatedId)
+    val newRelatedSubscriptions = subscriptions.getOrElse(facade.entity.id, Set.empty) - facade.entity.id
     if (newRelatedSubscriptions.isEmpty) subscriptions -= relatedId
     else subscriptions.update(relatedId, newRelatedSubscriptions)
   }
@@ -146,7 +156,7 @@ class MemoryStorage extends Notifier.Storage {
       ids.update(entityId, dataId)
     }
 
-  def getLastId(entityId: String): Future[String] = {
-    Future.successful(ids(entityId))
+  def getLastId(entityId: String): Future[Option[String]] = {
+    Future.successful(ids.get(entityId))
   }
 }

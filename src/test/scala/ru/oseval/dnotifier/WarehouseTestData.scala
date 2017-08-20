@@ -18,15 +18,9 @@ object WarehouseTestData {
     override val clock: WarehouseClock = if (products.isEmpty) "0" else products.keySet.maxBy(_.toLong)
   }
 
-  object WarehouseOps extends DataOps {
-    type DInner = WarehouseData
-
+  object WarehouseOps extends DataOps[WarehouseData] {
+    override val ordering: Ordering[WarehouseClock] = Data.timestampOrdering
     override val zero: WarehouseData = WarehouseData(Map.empty)
-
-    override val ordering: Ordering[WarehouseClock] = new Ordering[WarehouseClock] {
-      private val impl = implicitly[Ordering[Long]]
-      override def compare(x: WarehouseClock, y: WarehouseClock): Int = impl.compare(x.toLong, y.toLong)
-    }
 
     override def combine(a: WarehouseData, b: WarehouseData): WarehouseData =
       WarehouseData(a.products ++ b.products)
@@ -34,27 +28,13 @@ object WarehouseTestData {
     override def diffFromClock(data: WarehouseData, from: WarehouseClock): WarehouseData =
       WarehouseData(products = data.products.filterKeys(ordering.gt(_, from)))
 
-    override def getRelatedEntities(data: WarehouseData): Set[ProductId] =
+    override def getRelations(data: WarehouseData): Set[ProductId] =
       data.products.values.toSet
+
+    override def makeId(ownId: Any): String = "warehouse_" + ownId
   }
 
-  class Warehouse(val id: WarehouseId,
-                  val notifyDataUpdated: (Notifier.NotifyDataUpdated) => Future[Unit],
-                  val log: LoggingAdapter)
-    extends AbstractEntity(WarehouseOps.zero) {
-    val ops = WarehouseOps
-
-    private val products = mutable.Map.empty[ProductId, ProductData]
-
-    override def relatedDataUpdated(relatedId: String, related: Data): Unit = related match {
-      case newData: ProductData if products contains relatedId ⇒
-        products.update(relatedId, ProductOps.combine(products(relatedId), newData))
-      case _ ⇒
-        log.warning("Uhandled data update from stream " + relatedId)
-    }
-  }
-
-  case class WarehouseFacade(id: WarehouseId, holder: ActorRef) extends ActorFacade {
+  case class WarehouseEntity(ownId: String) extends Entity[WarehouseData] {
     val ops = WarehouseOps
   }
 
@@ -68,13 +48,17 @@ object WarehouseTestData {
     extends ActorDataMethods with Actor with ActorLogging {
     private implicit val timeout: Timeout = 3.seconds
 
-    private val warehouse = new Warehouse(warehouseId, notifier.ask(_).mapTo[Unit], log)
+    private val warehouse = WarehouseEntity(warehouseId)
+    protected val storage = new LocalDataStorage(ActorFacade(_, self), notifier.ask(_).mapTo[Unit])
+
+    storage.addEntity(warehouse)
 
     override def receive: Receive = handleDataMessage(warehouse) orElse {
       case Ping ⇒ sender() ! Pong
-      case GetProducts ⇒ sender() ! warehouse.data.products.toMap
+      case GetProducts ⇒ sender() ! storage.get(warehouse).toSeq.flatMap(_.products).toMap
       case AddProduct(productId) ⇒
-        warehouse.combine(WarehouseData(products = Map(System.currentTimeMillis.toString → productId)))
+        storage.addRelation(ProductEntity(productId))
+        storage.combine(warehouse, WarehouseData(products = Map(System.currentTimeMillis.toString → productId)))
     }
   }
 }
