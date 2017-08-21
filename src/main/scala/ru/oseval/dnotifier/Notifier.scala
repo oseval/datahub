@@ -22,7 +22,7 @@ object Notifier {
                                                     lastClock: String,
                                                     relationClocks: Map[String, String]) extends NotifierMessage
   // TODO: add added and removed relations with their clocks?
-  private[dnotifier] case class NotifyDataUpdated(entityId: String, data: Data) extends NotifierMessage
+  private[dnotifier] case class NotifyDataUpdated(entity: Entity[Data], data: Data) extends NotifierMessage
 
   def props(storage: Storage): Props = Props(classOf[Notifier], storage)
 }
@@ -77,7 +77,7 @@ private class Notifier(storage: Storage) extends Actor with ActorLogging {
         storage.register(facade.entity.id, lastClock)
       } pipeTo sender()
 
-    case NotifyDataUpdated(entityId, d) ⇒
+    case NotifyDataUpdated(entity, d) ⇒
       facades.get(entityId).map((_, d)) match {
         case Some(EntityFacade(facade, data)) ⇒
           // who subscribed on that facade

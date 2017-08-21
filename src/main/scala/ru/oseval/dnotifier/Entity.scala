@@ -10,7 +10,6 @@ import ru.oseval.dnotifier.Data.{GetDifferenceFrom, RelatedDataUpdated}
 
 import scala.collection.mutable
 import scala.reflect.ClassTag
-import scala.util.Try
 
 trait Entity[D <: Data] {
   // TODO: add type annotation
@@ -18,6 +17,12 @@ trait Entity[D <: Data] {
   val ops: DataOps[D]
 
   lazy val id: String = ops.makeId(ownId)
+
+  def matchData(data: Data): Option[D] =
+    if (ops.zero.getClass isAssignableFrom data.getClass)
+      Option(data.asInstanceOf[D])
+    else
+      None
 }
 
 class LocalDataStorage(createFacade: Entity[_ <: Data] => EntityFacade[_ <: Data],
@@ -25,15 +30,16 @@ class LocalDataStorage(createFacade: Entity[_ <: Data] => EntityFacade[_ <: Data
                        knownData: Map[Entity[_ <: Data], _ <: Data] = Map.empty) {
   private val entities = mutable.Map[String, Entity[_ <: Data]](knownData.keys.map(e => e.id -> e).toSeq: _*)
   private val relations = mutable.Set.empty[String]
-  private val datas = mutable.Map[String, _ <: Data](knownData.map { case (e, v) => e.id -> v }.toSeq: _*)
+  private val datas = mutable.Map(knownData.map { case (e, v) => e.id -> v }.toSeq: _*)
 
   def addEntity[D <: Data](entity: Entity[D]): Future[Unit] = {
     entities.update(entity.id, entity)
-    val Some((e, d)) = isAssignable(entity, datas(entity.id))
-    val relationClocks = e.ops.getRelations(d)
-      .flatMap(id => datas.get(id).map(d => id -> d.clock)).toMap
-    // send current clock to avoid unnecessary update sending (from zero to current)
-    notify(Register(createFacade(entity), datas(entity.id).clock, relationClocks))
+    entity.matchData(datas(entity.id)).map { data =>
+      val relationClocks = entity.ops.getRelations(data)
+        .flatMap(id => datas.get(id).map(d => id -> d.clock)).toMap
+      // send current clock to avoid unnecessary update sending (from zero to current)
+      notify(Register(createFacade(entity), data.clock, relationClocks))
+    }.get
   }
 
   def addRelation(entity: Entity[Data]): Unit = {
@@ -41,28 +47,29 @@ class LocalDataStorage(createFacade: Entity[_ <: Data] => EntityFacade[_ <: Data
     relations += entity.id
   }
 
-  def combine(entityId: String, otherData: Data): Future[Unit] = {
-    entities.get(entityId).map(combine(_, otherData)) getOrElse Future.unit
-  }
+  def combine[D <: Data](entityId: String, otherData: D): Future[Unit] =
+    entities.get(entityId)
+      .map(e => combine(e.asInstanceOf[Entity[Data]], otherData))
+      .getOrElse(Future.unit)
 
-  def combine[D <: Data](entity: Entity[D], otherData: D): Future[Unit] = {
+  def combine[D <: Data](entity: Entity[D], otherData: D): Future[Unit] =
     if (relations contains entity.id) {
-      val Some((e, d)) = isAssignable(entity, datas(entity.id))
-      datas.update(
-        entity.id,
-        if (datas isDefinedAt entity.id) e.ops.combine(d, otherData) else otherData
-      )
+      val result =
+        datas.get(entity.id).flatMap(entity.matchData).map(data =>
+          entity.ops.combine(data, otherData)
+        ) getOrElse otherData
+
+      datas.update(entity.id, result.asInstanceOf[Data])
 
       Future.unit
     } else {
-      datas.get(entity.id).map { before ⇒
-        val Some((e, d)) = isAssignable(entity, datas(entity.id))
-
+      datas.get(entity.id).flatMap(entity.matchData).map { before ⇒
         val relatedBefore = entity.ops getRelations before
 
-        datas.update(entity.id, entity.ops.combine(before, otherData))
+        val after = entity.ops.combine(before, otherData)
+        datas.update(entity.id, after)
 
-        val relatedAfter = entity.ops getRelations datas(entity.id)
+        val relatedAfter = entity.ops getRelations after
 
         relations ++= (entity.ops getRelations otherData)
         relations --= (relatedBefore -- relatedAfter)
@@ -74,17 +81,20 @@ class LocalDataStorage(createFacade: Entity[_ <: Data] => EntityFacade[_ <: Data
 
       notify(NotifyDataUpdated(entity.id, otherData))
     }
-  }
 
   def diffFromClock(entity: Entity[Data], clock: String): Data =
     entity.ops.diffFromClock(datas.getOrElseUpdate(entity.id, entity.ops.zero), clock)
 
-  def isAssignable[D <: Data](e: Entity[D], data: D): Option[(Entity[D], D)] =
-      if (e.ops.zero.getClass isAssignableFrom data.getClass) Option((e, data.asInstanceOf[D]))
-      else None
+  object withMatchedOps {
+    def apply[D <: Data](ed: (Entity[D], _ <: Data)): Option[(Entity[D], D)] =
+      if (ed._1.ops.zero.getClass isAssignableFrom ed._2.getClass)
+        Option(ed._1, ed._2.asInstanceOf[D])
+      else
+        None
+  }
 
   def get[D <: Data](entity: Entity[D]): Option[D] =
-    datas.get(entity.id).flatMap(isAssignable(entity, _))
+    datas.get(entity.id).flatMap(entity.matchData)
 }
 
 trait NotAssociativeLocalDataStore[D <: NotAssociativeData] extends LocalDataStorage {
