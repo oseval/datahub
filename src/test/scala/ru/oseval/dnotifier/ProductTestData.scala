@@ -29,7 +29,8 @@ object ProductTestData {
     override def makeId(ownId: Any): String = "product_" + ownId
   }
 
-  case class ProductEntity(ownId: String) extends Entity[ProductData] {
+  case class ProductEntity(ownId: String) extends Entity {
+    override type D = ProductData
     val ops = ProductOps
   }
 
@@ -47,11 +48,11 @@ object ProductTestData {
     private val product = ProductEntity(productId)
     protected val storage = new LocalDataStorage(ActorFacade(_, self), notifier.ask(_).mapTo[Unit])
 
-    storage.addEntity(product)
+    storage.addEntity(product)(product.ops.zero)
 
     override def receive: Receive = handleDataMessage(product) orElse {
-      case Ping ⇒ sender() ! Pong
-      case UpdateData(updated) ⇒ storage.combine(product, updated) pipeTo sender()
+      case Ping => sender() ! Pong
+      case UpdateData(updated) => storage.combine(product)(updated) pipeTo sender()
     }
   }
 }

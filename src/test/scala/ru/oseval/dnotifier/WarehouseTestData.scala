@@ -34,7 +34,8 @@ object WarehouseTestData {
     override def makeId(ownId: Any): String = "warehouse_" + ownId
   }
 
-  case class WarehouseEntity(ownId: String) extends Entity[WarehouseData] {
+  case class WarehouseEntity(ownId: String) extends Entity {
+    override type D = WarehouseData
     val ops = WarehouseOps
   }
 
@@ -51,14 +52,15 @@ object WarehouseTestData {
     private val warehouse = WarehouseEntity(warehouseId)
     protected val storage = new LocalDataStorage(ActorFacade(_, self), notifier.ask(_).mapTo[Unit])
 
-    storage.addEntity(warehouse)
+    storage.addEntity(warehouse)(warehouse.ops.zero)
 
     override def receive: Receive = handleDataMessage(warehouse) orElse {
       case Ping ⇒ sender() ! Pong
       case GetProducts ⇒ sender() ! storage.get(warehouse).toSeq.flatMap(_.products).toMap
       case AddProduct(productId) ⇒
-        storage.addRelation(ProductEntity(productId))
-        storage.combine(warehouse, WarehouseData(products = Map(System.currentTimeMillis.toString → productId)))
+        val product = ProductEntity(productId)
+        storage.addRelation(product)
+        storage.combine(warehouse)(WarehouseData(products = Map(System.currentTimeMillis.toString → product.id)))
     }
   }
 }
