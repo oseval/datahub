@@ -72,8 +72,8 @@ class NotifierSpec extends TestKit(ActorSystem("notifierTest"))
       Register(warehouseFacade, warehouseData.clock, Map(product.id -> ProductOps.zero.clock))
     )
 
-    val res = productHolderProbe.expectMsgType[GetDifferenceFrom]
-    res.dataClock shouldEqual productData.clock
+    productHolderProbe.expectMsgType[GetDifferenceFrom].dataClock shouldEqual productData.clock
+    println(("HHHHHH", productHolderProbe.lastSender))
     productHolderProbe.lastSender ! newProductData
 
     val res2 = warehouseHolderProbe.expectMsgType[RelatedDataUpdated]
@@ -118,32 +118,28 @@ class NotifierSpec extends TestKit(ActorSystem("notifierTest"))
     val notifier = system.actorOf(Notifier.props(storage))
 
     val productHolderProbe = TestProbe("productHolder")
-    val productId = "Product 1"
-    val product = ProductEntity(productId)
-    val productData = ProductOps.zero
+    val product = ProductEntity("1")
 
     // cache of product data
     val warehouseHolderProbe = TestProbe("warehouseHolder")
-    val warehouseId = "Warehouse 1"
-    val warehouseData = WarehouseOps.zero
-    val warehouseFacade = ActorFacade(WarehouseEntity(warehouseId), warehouseHolderProbe.ref)
+    val warehouse = WarehouseEntity("1")
+    val warehouseFacade = ActorFacade(warehouse, warehouseHolderProbe.ref)
 
     // Register product
-    notifier.ask(Register(ActorFacade(product, productHolderProbe.ref), productData.clock, Map.empty)).futureValue
+    notifier.ask(Register(ActorFacade(product, productHolderProbe.ref), ProductOps.zero.clock, Map.empty)).futureValue
 
     // Register warehouse
-    notifier.ask(Register(warehouseFacade, warehouseData.clock, Map.empty)).futureValue
+    notifier.ask(Register(warehouseFacade, WarehouseOps.zero.clock, Map.empty)).futureValue
 
     // Send update with new related entity
-    val newWarehouseData = WarehouseData(Map(System.currentTimeMillis.toString → productId))
-    notifier.ask(NotifyDataUpdated(warehouseId, newWarehouseData)).futureValue
+    val newWarehouseData = WarehouseData(Map(System.currentTimeMillis.toString → product.id))
+    notifier.ask(NotifyDataUpdated(warehouse.id, newWarehouseData)).futureValue
 
     // Product entity data is updated
     val newProductData = ProductData("TV", 1, System.currentTimeMillis)
-    notifier.ask(NotifyDataUpdated(productId, newProductData)).futureValue
+    notifier.ask(NotifyDataUpdated(product.id, newProductData)).futureValue
 
-    val res = warehouseHolderProbe.expectMsgType[RelatedDataUpdated]
-    res.data.clock shouldEqual newProductData.clock
+    warehouseHolderProbe.expectMsgType[RelatedDataUpdated].data.clock shouldEqual newProductData.clock
     warehouseHolderProbe.lastSender ! ()
   }
 }

@@ -129,15 +129,15 @@ trait EntityFacade {
     * @param relatedData
     * @return
     */
-  def onUpdate(relatedId: String, relatedData: entity.D)(implicit timeout: Timeout): Future[Unit]
+  def onUpdate(relatedId: String, relatedData: Data)(implicit timeout: Timeout): Future[Unit]
 }
 
 case class ActorFacade[D <: Data: ClassTag](entity: Entity,
                                             holder: ActorRef) extends EntityFacade {
   override def getUpdatesFrom(dataClock: String)(implicit timeout: Timeout): Future[D] =
-    holder.ask(GetDifferenceFrom(entity.id, dataClock)).mapTo[D]
+    holder.ask(GetDifferenceFrom(entity.id, dataClock)).asInstanceOf[Future[D]]
 
-  override def onUpdate (relatedId: String, relatedData: entity.D) (implicit timeout: Timeout): Future[Unit] =
+  override def onUpdate(relatedId: String, relatedData: Data) (implicit timeout: Timeout): Future[Unit] =
     holder.ask(RelatedDataUpdated(entity.id, relatedId, relatedData)).mapTo[Unit]
 }
 

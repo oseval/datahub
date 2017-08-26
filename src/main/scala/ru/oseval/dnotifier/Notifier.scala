@@ -53,12 +53,12 @@ private class Notifier(storage: Storage) extends Actor with ActorLogging {
     .to(Sink.ignore)
     .run
 
-  class DataTask private[DataTask] (val facade: EntityFacade, val relatedId: String, val relatedData: Any)
+  class DataTask private[DataTask] (val facade: EntityFacade, val related: Entity, val relatedData: Any)
   object DataTask {
-    def apply(facade: EntityFacade, relatedId: String)(relatedData: facade.entity.D): DataTask =
-      new DataTask(facade, relatedId, relatedData)
+    def apply(facade: EntityFacade, related: Entity)(relatedData: related.D): DataTask =
+      new DataTask(facade, related, relatedData)
     def unapply(arg: DataTask): Option[(arg.facade.type, String, arg.facade.entity.D)] =
-      Some((arg.facade, arg.relatedId, arg.relatedData.asInstanceOf[arg.facade.entity.D]))
+      Some((arg.facade, arg.related.id, arg.relatedData.asInstanceOf[arg.facade.entity.D]))
   }
 
   override def receive: Receive = {
@@ -90,7 +90,7 @@ private class Notifier(storage: Storage) extends Actor with ActorLogging {
           subscriptions
             .getOrElse(facade.entity.id, Set.empty)
             .flatMap(facades.get)
-            .foreach(f => sendChangeToOne(f, entityId)(f.entity.matchData(data).get))
+            .foreach(f => sendChangeToOne(f, facade.entity)(facade.entity.matchData(data).get))
 
           // the facades on which that facade depends
           val relatedFacades = facade.entity.ops.getRelations(facade.entity.matchData(data).get)
@@ -110,8 +110,8 @@ private class Notifier(storage: Storage) extends Actor with ActorLogging {
 
   }
 
-  private def sendChangeToOne(to: EntityFacade, relatedId: String)(relatedData: to.entity.D): Future[Unit] =
-    queueOffer(DataTask(to, relatedId)(relatedData))
+  private def sendChangeToOne(to: EntityFacade, related: Entity)(relatedData: related.D): Future[Unit] =
+    queueOffer(DataTask(to, related)(relatedData))
 
   protected def queueOffer(task: DataTask): Future[Unit] = {
     subscriptionQueue.offer(task).map {
@@ -126,6 +126,7 @@ private class Notifier(storage: Storage) extends Actor with ActorLogging {
   }
 
   private def subscribe(facade: EntityFacade, relatedId: String, lastKnownDataClockOpt: Option[String]): Unit = {
+    log.debug("subscribe {}, {}, {}", facade.entity.id, relatedId, facades.get(relatedId))
     val relatedSubscriptions = subscriptions.getOrElse(relatedId, Set.empty)
     subscriptions.update(relatedId, relatedSubscriptions + facade.entity.id)
     reverseSubscriptions.update(facade.entity.id, reverseSubscriptions.getOrElse(facade.entity.id, Set.empty) + relatedId)
@@ -134,10 +135,14 @@ private class Notifier(storage: Storage) extends Actor with ActorLogging {
       log.debug("Subscribe entity {} on {} with last known data id {}", facade.entity.id, relatedId, lastKnownDataClockOpt)
 
       storage.getLastId(relatedId).foreach(_.foreach { lastClock =>
+        println(("wefwfwefwf"))
         val lastKnownDataClock = lastKnownDataClockOpt getOrElse related.entity.ops.zero.clock
-        if (!related.entity.ops.ordering.equiv(lastClock, lastKnownDataClock))
+
+        log.debug("lastClock {}, lastKnownClock {}, {}", lastClock, lastKnownDataClock, related.entity.ops.ordering.gt(lastClock, lastKnownDataClock))
+
+        if (related.entity.ops.ordering.gt(lastClock, lastKnownDataClock))
           related.getUpdatesFrom(lastKnownDataClock).foreach(d =>
-            sendChangeToOne(facade, relatedId)(facade.entity.matchData(d).get)
+            sendChangeToOne(facade, related.entity)(related.entity.matchData(d).get)
           )
       })
     }
