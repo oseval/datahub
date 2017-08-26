@@ -4,7 +4,6 @@ import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.pattern.{ask, pipe}
 import akka.util.Timeout
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
 
 object ProductTestData {
@@ -46,7 +45,7 @@ object ProductTestData {
     import context.dispatcher
     private implicit val timeout: Timeout = 3.seconds
     private val product = ProductEntity(productId)
-    protected val storage = new LocalDataStorage(ActorFacade(_, self), notifier.ask(_).mapTo[Unit])
+    protected val storage = new LocalDataStorage(log, ActorFacade(_, self), notifier.ask(_).mapTo[Unit])
 
     storage.addEntity(product)(product.ops.zero)
 

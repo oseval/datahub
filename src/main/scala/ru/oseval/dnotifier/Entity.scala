@@ -4,12 +4,12 @@ import ru.oseval.dnotifier.Notifier.{NotifierMessage, NotifyDataUpdated, Registe
 
 import scala.concurrent.Future
 import akka.actor.{Actor, ActorRef}
+import akka.event.LoggingAdapter
 import akka.util.Timeout
 import akka.pattern.ask
 import ru.oseval.dnotifier.Data.{GetDifferenceFrom, RelatedDataUpdated}
 
 import scala.collection.mutable
-import scala.reflect.ClassTag
 
 trait Entity {
   type D <: Data
@@ -20,13 +20,14 @@ trait Entity {
   lazy val id: String = ops.makeId(ownId)
 
   def matchData(data: Data): Option[D] =
-    if (ops.zero.getClass isAssignableFrom data.getClass)
+    if (ops.zero.getClass == data.getClass)
       Option(data.asInstanceOf[D])
     else
       None
 }
 
-class LocalDataStorage(createFacade: Entity => EntityFacade,
+class LocalDataStorage(log: LoggingAdapter,
+                       createFacade: Entity => EntityFacade,
                        notify: NotifierMessage => Future[Unit],
                        knownData: Map[Entity, Data] = Map.empty) {
   private val entities = mutable.Map[String, Entity](knownData.keys.map(e => e.id -> e).toSeq: _*)
@@ -35,13 +36,15 @@ class LocalDataStorage(createFacade: Entity => EntityFacade,
 
   def addEntity(entity: Entity)(_data: entity.D): Future[Unit] = {
     entities.update(entity.id, entity)
-    val d = datas.getOrElseUpdate(entity.id, _data)
-    entity.matchData(d).map { data =>
-      val relationClocks = entity.ops.getRelations(data)
-        .flatMap(id => datas.get(id).map(d => id -> d.clock)).toMap
-      // send current clock to avoid unnecessary update sending (from zero to current)
-      notify(Register(createFacade(entity), data.clock, relationClocks))
-    }.get
+    val data = get(entity).getOrElse {
+      datas.update(entity.id, _data)
+      _data
+    }
+
+    val relationClocks = entity.ops.getRelations(data)
+      .flatMap(id => datas.get(id).map(d => id -> d.clock)).toMap
+    // send current clock to avoid unnecessary update sending (from zero to current)
+    notify(Register(createFacade(entity), data.clock, relationClocks))
   }
 
   def addRelation(entity: Entity): Unit = {
@@ -49,23 +52,31 @@ class LocalDataStorage(createFacade: Entity => EntityFacade,
     relations += entity.id
   }
 
-  def combine[D <: Data](entityId: String, otherData: D): Future[Unit] =
+  def combine(entityId: String, otherData: Data): Future[Unit] =
     entities.get(entityId)
-      .flatMap(e => e.matchData(otherData).map(combine(e)(_)))
+      .map(e =>
+        e.matchData(otherData) match {
+          case Some(data) => combine(e)(data)
+          case None =>
+            Future.failed(new Exception(
+              "Data " + otherData.getClass.getName + " does not match with entity " + e.getClass.getName
+            ))
+        }
+      )
       .getOrElse(Future.unit)
 
   def combine(entity: Entity)(otherData: entity.D): Future[Unit] =
     if (relations contains entity.id) {
       val result =
-        datas.get(entity.id).flatMap(entity.matchData(_)).map(data =>
-          entity.ops.combine(data, otherData)
-        ) getOrElse otherData
+        get(entity)
+          .map(entity.ops.combine(_, otherData))
+          .getOrElse(otherData)
 
-      datas.update(entity.id, result.asInstanceOf[Data])
+      datas.update(entity.id, result)
 
       Future.unit
     } else {
-      datas.get(entity.id).flatMap(entity.matchData(_)).map { before ⇒
+      get(entity).map { before ⇒
         val relatedBefore = entity.ops getRelations before
 
         val after = entity.ops.combine(before, otherData)
@@ -85,18 +96,23 @@ class LocalDataStorage(createFacade: Entity => EntityFacade,
     }
 
   def diffFromClock(entity: Entity, clock: String): entity.D =
-    entity.ops.diffFromClock(entity.matchData(datas.getOrElseUpdate(entity.id, entity.ops.zero)).get, clock)
-
-  object withMatchedOps {
-    def apply[D <: Data](ed: (Entity, Data)): Option[(Entity, ed._1.type#D)] =
-      if (ed._1.ops.zero.getClass isAssignableFrom ed._2.getClass)
-        Option(ed._1, ed._2.asInstanceOf[ed._1.type#D])
-      else
-        None
-  }
+    entity.ops.diffFromClock({
+      get(entity).getOrElse {
+        datas.update(entity.id, entity.ops.zero)
+        entity.ops.zero
+      }
+    }, clock)
 
   def get[D <: Data](entity: Entity): Option[entity.D] =
-    datas.get(entity.id).flatMap(entity.matchData(_))
+    datas.get(entity.id).map(d =>
+      entity.matchData(d) match {
+        case Some(data) => data
+        case None =>
+          throw new Exception(
+            "Inconsistent state of localstorage: entity " + entity.id + " does not match to data " + d.getClass.getName
+          )
+      }
+    )
 }
 
 trait NotAssociativeLocalDataStore[D <: NotAssociativeData] extends LocalDataStorage {
@@ -104,13 +120,6 @@ trait NotAssociativeLocalDataStore[D <: NotAssociativeData] extends LocalDataSto
 //    if (data.clock == otherData.previousClock) super.combine(otherData)
 //    else
 //  }
-}
-
-object EntityFacade {
-  def unapply[D <: Data](facadeWithData: (EntityFacade, D)): Option[(facadeWithData._1.type, facadeWithData._1.entity.D)] =
-    if (facadeWithData._1.entity.ops.zero.getClass isAssignableFrom facadeWithData._2.getClass)
-      Some(facadeWithData.asInstanceOf[(facadeWithData._1.type, facadeWithData._1.entity.D)])
-    else None
 }
 
 trait EntityFacade {
@@ -121,7 +130,7 @@ trait EntityFacade {
     * @param dataClock
     * @return
     */
-  def getUpdatesFrom(dataClock: String)(implicit timeout: Timeout): Future[Data]
+  def getUpdatesFrom(dataClock: String)(implicit timeout: Timeout): Future[entity.D]
 
   /**
     * Receives updates of related external data
@@ -132,12 +141,11 @@ trait EntityFacade {
   def onUpdate(relatedId: String, relatedData: Data)(implicit timeout: Timeout): Future[Unit]
 }
 
-case class ActorFacade[D <: Data: ClassTag](entity: Entity,
-                                            holder: ActorRef) extends EntityFacade {
-  override def getUpdatesFrom(dataClock: String)(implicit timeout: Timeout): Future[D] =
-    holder.ask(GetDifferenceFrom(entity.id, dataClock)).asInstanceOf[Future[D]]
+case class ActorFacade(entity: Entity, holder: ActorRef) extends EntityFacade {
+  override def getUpdatesFrom(dataClock: String)(implicit timeout: Timeout): Future[entity.D] =
+    holder.ask(GetDifferenceFrom(entity.id, dataClock)).asInstanceOf[Future[entity.D]]
 
-  override def onUpdate(relatedId: String, relatedData: Data) (implicit timeout: Timeout): Future[Unit] =
+  override def onUpdate(relatedId: String, relatedData: Data)(implicit timeout: Timeout): Future[Unit] =
     holder.ask(RelatedDataUpdated(entity.id, relatedId, relatedData)).mapTo[Unit]
 }
 
