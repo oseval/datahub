@@ -73,7 +73,6 @@ class NotifierSpec extends TestKit(ActorSystem("notifierTest"))
     )
 
     productHolderProbe.expectMsgType[GetDifferenceFrom].dataClock shouldEqual productData.clock
-    println(("HHHHHH", productHolderProbe.lastSender))
     productHolderProbe.lastSender ! newProductData
 
     val res2 = warehouseHolderProbe.expectMsgType[RelatedDataUpdated]

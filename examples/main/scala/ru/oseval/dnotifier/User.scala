@@ -1,12 +1,10 @@
 package ru.oseval.dnotifier
 
-import akka.actor.{Actor, ActorRef, Props}
+import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.pattern.{ask, pipe}
 import akka.util.Timeout
-import ru.oseval.dnotifier.Notifier.Register
-import ru.oseval.dnotifier.User.{ChangeName, UserData, UserEntity, UserFacade}
+import ru.oseval.dnotifier.User.{ChangeName, UserData, UserEntity}
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
 
 case class User(id: Long, name: String)
@@ -27,24 +25,29 @@ object User {
 
     override def diffFromClock(a: UserData, from: String): UserData = a
     override def getRelations(data: UserData): Set[String] = Set.empty
+
+    override def makeId(ownId: Any): String = "user_" + ownId
   }
 
-  case class UserEntity(id: String) extends Entity {
+  case class UserEntity(userId: Long) extends Entity {
+    override type D = UserData
     override val ops = UserOps
+    override val ownId: Any = id.toString
   }
 }
 
-private class UserActor(id: Long, name: String, notifier: ActorRef) extends Actor with ActorDataMethods {
+private class UserActor(id: Long, name: String, notifier: ActorRef)
+  extends Actor with ActorDataMethods with ActorLogging {
   import context.dispatcher
 
   private implicit val timeout: Timeout = 3.seconds
-  private val user = UserEntity("user_" + id)
-  private val storage = new LocalDataStorage(ActorFacade(_, self), notifier.ask(_).mapTo[Unit])
+  private val user = UserEntity(id)
+  protected val storage = new LocalDataStorage(log, ActorFacade(_, self), notifier.ask(_).mapTo[Unit])
 
-  storage.addEntity(user)
-  storage.combine(user, UserData(name, System.currentTimeMillis.toString))
+  storage.addEntity(user)(UserData(name, System.currentTimeMillis.toString))
 
   override def receive: Receive = handleDataMessage(user) orElse {
-    case ChangeName(n) => user.combine(UserData(n, System.currentTimeMillis.toString)) pipeTo sender()
+    case ChangeName(n) =>
+      storage.combine(user)(UserData(n, System.currentTimeMillis.toString)) pipeTo sender()
   }
 }

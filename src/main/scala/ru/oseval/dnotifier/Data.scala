@@ -54,7 +54,7 @@ abstract class DataOps[D <: Data] {
 
   /**
     * Returns the entity ids which related to a specified data
-    * @param data
+    * @param datastorage.addEntity(group)(GroupData(title, Map.empty, Map.empty, System.currentTimeMillis.toString))
     * @return
     */
   def getRelations(data: D): Set[String]
