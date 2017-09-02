@@ -14,6 +14,7 @@ resolvers ++= Seq(
 libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-stream" % "2.5.2",
   "com.typesafe.akka" %% "akka-stream-testkit" % "2.5.2" % "test",
+  "org.slf4j" % "slf4j-api" % "1.7.25",
   "org.scalatest" %% "scalatest" % "3.0.1" % "test",
   "org.specs" % "specs" % "1.4.3",
   "org.mockito" % "mockito-all" % "1.10.19",
