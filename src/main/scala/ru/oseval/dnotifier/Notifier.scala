@@ -3,7 +3,7 @@ package ru.oseval.dnotifier
 import org.slf4j.LoggerFactory
 
 import scala.collection.mutable
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 
 object Notifier {
@@ -16,9 +16,9 @@ object Notifier {
 
 import Notifier._
 
-class Notifier(storage: Storage) {
+abstract class Notifier(storage: Storage, implicit val ex: ExecutionContext) {
   private val log = LoggerFactory.getLogger(getClass)
-//  private implicit val timeout: Timeout = 3.seconds
+  private implicit val timeout: FiniteDuration = 3.seconds
 
   private val facades = mutable.Map.empty[String, EntityFacade]
   private val subscriptions = mutable.Map.empty[String, Set[String]] // facade -> subscriptions
@@ -46,6 +46,7 @@ class Notifier(storage: Storage) {
     }
   }
 
+  // TODO: add added and removed relations with their clocks?
   def dataUpdated(entityId: String, _data: Data): Future[Unit] =
     facades.get(entityId).fold(
       Future.failed[Unit](new Exception("Facade with id=" + entityId + " is not registered"))
@@ -61,7 +62,6 @@ class Notifier(storage: Storage) {
           .getOrElse(facade.entity.id, Set.empty)
           .flatMap(facades.get)
           .foreach(f => sendChangeToOne(f, facade.entity)(data))
-
         // the facades on which that facade depends
         val relatedFacades = facade.entity.ops.getRelations(data)
         val removed = reverseSubscriptions.getOrElse(entityId, Set.empty) -- relatedFacades
@@ -89,7 +89,9 @@ class Notifier(storage: Storage) {
       storage.getLastId(relatedId).foreach(_.foreach { lastClock =>
         val lastKnownDataClock = lastKnownDataClockOpt getOrElse related.entity.ops.zero.clock
 
-        log.debug("lastClock {}, lastKnownClock {}, {}", lastClock, lastKnownDataClock, related.entity.ops.ordering.gt(lastClock, lastKnownDataClock))
+        log.debug("lastClock {}, lastKnownClock {}, {}",
+          Seq(lastClock, lastKnownDataClock, related.entity.ops.ordering.gt(lastClock, lastKnownDataClock))
+        )
 
         if (related.entity.ops.ordering.gt(lastClock, lastKnownDataClock))
           related.getUpdatesFrom(lastKnownDataClock).foreach(d =>
@@ -100,7 +102,7 @@ class Notifier(storage: Storage) {
   }
 
   private def unsubscribe(facade: EntityFacade, relatedId: String): Unit = {
-    log.debug("Unsubscribe entity {} from related {}", facade.entity.id, relatedId)
+    log.debug("Unsubscribe entity {} from related {}", Seq(facade.entity.id, relatedId): _*)
     val newRelatedSubscriptions = subscriptions.getOrElse(facade.entity.id, Set.empty) - facade.entity.id
     if (newRelatedSubscriptions.isEmpty) subscriptions -= relatedId
     else subscriptions.update(relatedId, newRelatedSubscriptions)

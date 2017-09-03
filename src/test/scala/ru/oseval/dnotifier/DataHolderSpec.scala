@@ -7,7 +7,7 @@ import org.scalatest.{BeforeAndAfterAll, FlatSpecLike}
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.scalatest.easymock.EasyMockSugar
 import ru.oseval.dnotifier.Data.{GetDifferenceFrom, RelatedDataUpdated}
-import ru.oseval.dnotifier.Notifier.{NotifyDataUpdated, Register}
+import ru.oseval.dnotifier.ActorNotifier.{NotifyDataUpdated, Register}
 
 class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
   with ImplicitSender

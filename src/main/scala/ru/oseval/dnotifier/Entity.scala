@@ -1,6 +1,6 @@
 package ru.oseval.dnotifier
 
-import ru.oseval.dnotifier.Notifier.{NotifierMessage, NotifyDataUpdated, Register}
+import ru.oseval.dnotifier.ActorNotifier.{NotifierMessage, NotifyDataUpdated, Register}
 
 import scala.concurrent.Future
 import akka.actor.{Actor, ActorRef}
@@ -10,6 +10,7 @@ import akka.pattern.ask
 import ru.oseval.dnotifier.Data.{GetDifferenceFrom, RelatedDataUpdated}
 
 import scala.collection.mutable
+import scala.concurrent.duration.FiniteDuration
 
 trait Entity {
   type D <: Data
@@ -130,7 +131,7 @@ trait EntityFacade {
     * @param dataClock
     * @return
     */
-  def getUpdatesFrom(dataClock: String)(implicit timeout: Timeout): Future[entity.D]
+  def getUpdatesFrom(dataClock: String)(implicit timeout: FiniteDuration): Future[entity.D]
 
   /**
     * Receives updates of related external data
@@ -138,15 +139,15 @@ trait EntityFacade {
     * @param relatedData
     * @return
     */
-  def onUpdate(relatedId: String, relatedData: Data)(implicit timeout: Timeout): Future[Unit]
+  def onUpdate(relatedId: String, relatedData: Data)(implicit timeout: FiniteDuration): Future[Unit]
 }
 
 case class ActorFacade(entity: Entity, holder: ActorRef) extends EntityFacade {
-  override def getUpdatesFrom(dataClock: String)(implicit timeout: Timeout): Future[entity.D] =
-    holder.ask(GetDifferenceFrom(entity.id, dataClock)).asInstanceOf[Future[entity.D]]
+  override def getUpdatesFrom(dataClock: String)(implicit timeout: FiniteDuration): Future[entity.D] =
+    holder.ask(GetDifferenceFrom(entity.id, dataClock))(timeout).asInstanceOf[Future[entity.D]]
 
-  override def onUpdate(relatedId: String, relatedData: Data)(implicit timeout: Timeout): Future[Unit] =
-    holder.ask(RelatedDataUpdated(entity.id, relatedId, relatedData)).mapTo[Unit]
+  override def onUpdate(relatedId: String, relatedData: Data)(implicit timeout: FiniteDuration): Future[Unit] =
+    holder.ask(RelatedDataUpdated(entity.id, relatedId, relatedData))(timeout).mapTo[Unit]
 }
 
 trait ActorDataMethods { this: Actor =>

@@ -13,6 +13,7 @@ import ProductTestData._
 import WarehouseTestData._
 import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
+import ru.oseval.dnotifier.ActorNotifier.{NotifyDataUpdated, Register}
 import ru.oseval.dnotifier.Data.{GetDifferenceFrom, RelatedDataUpdated}
 
 class NotifierSpec extends TestKit(ActorSystem("notifierTest"))
@@ -38,7 +39,7 @@ class NotifierSpec extends TestKit(ActorSystem("notifierTest"))
 
   it should "register data entities" in {
     val holderProbe = TestProbe("holder")
-    val notifier = system.actorOf(Notifier.props(storage))
+    val notifier = system.actorOf(ActorNotifier.props(storage))
 
     val facade = ActorFacade(ProductEntity("Product1"), holderProbe.ref)
     notifier ! Register(facade, ProductOps.zero.clock, Map.empty)
@@ -46,7 +47,7 @@ class NotifierSpec extends TestKit(ActorSystem("notifierTest"))
   }
 
   it should "subscribe on related data entities" in {
-    val notifier = system.actorOf(Notifier.props(storage))
+    val notifier = system.actorOf(ActorNotifier.props(storage))
 
     val productHolderProbe = TestProbe("productHolder")
     val product = ProductEntity("Product1")
@@ -83,7 +84,7 @@ class NotifierSpec extends TestKit(ActorSystem("notifierTest"))
   }
 
   it should "receive updates from related entities" in {
-    val notifier = system.actorOf(Notifier.props(storage))
+    val notifier = system.actorOf(ActorNotifier.props(storage))
 
     val productHolderProbe = TestProbe("productHolder")
     val product = ProductEntity("Product1")
@@ -114,7 +115,7 @@ class NotifierSpec extends TestKit(ActorSystem("notifierTest"))
   }
 
   it should "subscribe entity to new related entities" in {
-    val notifier = system.actorOf(Notifier.props(storage))
+    val notifier = system.actorOf(ActorNotifier.props(storage))
 
     val productHolderProbe = TestProbe("productHolder")
     val product = ProductEntity("1")
