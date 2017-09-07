@@ -7,7 +7,7 @@ import org.scalatest.{BeforeAndAfterAll, FlatSpecLike}
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.scalatest.easymock.EasyMockSugar
 import ru.oseval.datahub.Data.{GetDifferenceFrom, RelatedDataUpdated}
-import ru.oseval.datahub.Datahub.Register
+import ru.oseval.datahub.Datahub.{DataUpdated, Register}
 
 class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
   with ImplicitSender
@@ -19,7 +19,9 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
   with Eventually {
 
   import ProductTestData._
+  import ActorProductTestData._
   import WarehouseTestData._
+  import ActorWarehouseTestData._
 
   override def afterAll {
     TestKit.shutdownActorSystem(system)
@@ -42,7 +44,7 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
 
     val newProductData = ProductData("Product name", 1, System.currentTimeMillis)
     productHolder ! UpdateData(newProductData)
-    notifier.expectMsgType[NotifyDataUpdated].data shouldEqual newProductData
+    notifier.expectMsgType[DataUpdated].data shouldEqual newProductData
     notifier.lastSender ! ()
     expectMsgType[Unit]
 
@@ -60,7 +62,7 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
 
     val productData = ProductData("Product name", 1, System.currentTimeMillis)
     productHolder ! UpdateData(productData)
-    val msg = notifier.expectMsgType[NotifyDataUpdated]
+    val msg = notifier.expectMsgType[DataUpdated]
     msg.entityId shouldBe product.id
     msg.data.clock shouldBe productData.clock
   }
@@ -76,7 +78,7 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
     expectMsgType[WarehouseData] shouldEqual WarehouseOps.zero
 
     warehouseHolder ! AddProduct(product.ownId)
-    notifier.expectMsgType[NotifyDataUpdated]
+    notifier.expectMsgType[DataUpdated]
     warehouseHolder ! ()
 
     warehouseHolder ! GetDifferenceFrom(warehouse.id, WarehouseOps.zero.clock)
