@@ -1,4 +1,4 @@
-name := "dnotifier"
+name := "datahub"
 
 version := "0.1-SNAPSHOT"
 
@@ -11,12 +11,29 @@ resolvers ++= Seq(
   Classpaths.sbtPluginReleases
 )
 
-libraryDependencies ++= Seq(
-  "com.typesafe.akka" %% "akka-stream" % "2.5.2",
-  "com.typesafe.akka" %% "akka-stream-testkit" % "2.5.2" % "test",
-  "org.slf4j" % "slf4j-api" % "1.7.25",
-  "org.scalatest" %% "scalatest" % "3.0.1" % "test",
-  "org.specs" % "specs" % "1.4.3",
-  "org.mockito" % "mockito-all" % "1.10.19",
-  "org.scalamock" %% "scalamock-scalatest-support" % "3.6.0",
-  "org.easymock" % "easymock" % "3.4")
+val commonSettings = Seq(
+  libraryDependencies ++= Seq(
+    "org.slf4j" % "slf4j-api" % "1.7.25",
+    "org.scalatest" %% "scalatest" % "3.0.1" % "test",
+    "org.specs" % "specs" % "1.4.3" % "test",
+    "org.mockito" % "mockito-all" % "1.10.19" % "test",
+    "org.scalamock" %% "scalamock-scalatest-support" % "3.6.0" % "test",
+    "org.easymock" % "easymock" % "3.4" % "test"
+  )
+)
+
+lazy val root = (project in file(".")).aggregate(core, datahubAkka, examples)
+
+lazy val core = (project in file("core")).settings(commonSettings)
+
+lazy val datahubAkka = (project in file("datahub-akka"))
+  .dependsOn(core)
+  .settings(commonSettings)
+  .settings(libraryDependencies ++= Seq(
+    "com.typesafe.akka" %% "akka-stream" % "2.5.2",
+    "com.typesafe.akka" %% "akka-stream-testkit" % "2.5.2" % "test"
+  ))
+
+lazy val examples = (project in file("examples"))
+  .dependsOn(core, datahubAkka)
+  .settings(commonSettings)
