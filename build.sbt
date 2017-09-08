@@ -17,8 +17,7 @@ val commonSettings = Seq(
     "org.scalatest" %% "scalatest" % "3.0.1" % "test",
     "org.specs" % "specs" % "1.4.3" % "test",
     "org.mockito" % "mockito-all" % "1.10.19" % "test",
-    "org.scalamock" %% "scalamock-scalatest-support" % "3.6.0" % "test",
-    "org.easymock" % "easymock" % "3.4" % "test"
+    "org.scalamock" %% "scalamock-scalatest-support" % "3.6.0" % "test"
   )
 )
 

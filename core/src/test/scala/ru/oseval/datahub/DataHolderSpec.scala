@@ -3,20 +3,18 @@ package ru.oseval.datahub
 import org.scalatest
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike}
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
-import org.scalatest.easymock.EasyMockSugar
 import ru.oseval.datahub.Data.{GetDifferenceFrom, RelatedDataUpdated}
 
 class DataHolderSpec extends FlatSpecLike
   with BeforeAndAfterAll
   with ScalaFutures
-  with EasyMockSugar
   with scalatest.Matchers
   with Eventually {
 
   import ProductTestData._
   import WarehouseTestData._
 
-  behavior of "Data holder"
+//  behavior of "Data holder"
 
 //  it should "response on get difference from id" in {
 //    val product = ProductEntity("1")

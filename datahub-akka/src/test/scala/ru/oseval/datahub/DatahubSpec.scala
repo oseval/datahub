@@ -5,7 +5,6 @@ import akka.pattern.ask
 import org.scalatest
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike}
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
-import org.scalatest.easymock.EasyMockSugar
 import ru.oseval.datahub.Datahub._
 
 import scala.concurrent.duration._
@@ -20,7 +19,6 @@ class DatahubSpec extends TestKit(ActorSystem("notifierTest"))
   with FlatSpecLike
   with BeforeAndAfterAll
   with ScalaFutures
-  with EasyMockSugar
   with scalatest.Matchers
   with Eventually {
 

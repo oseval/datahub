@@ -5,7 +5,6 @@ import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import org.scalatest
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike}
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
-import org.scalatest.easymock.EasyMockSugar
 import ru.oseval.datahub.Data.{GetDifferenceFrom, RelatedDataUpdated}
 import ru.oseval.datahub.Datahub.{DataUpdated, Register}
 
@@ -14,7 +13,6 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
   with FlatSpecLike
   with BeforeAndAfterAll
   with ScalaFutures
-  with EasyMockSugar
   with scalatest.Matchers
   with Eventually {
 
