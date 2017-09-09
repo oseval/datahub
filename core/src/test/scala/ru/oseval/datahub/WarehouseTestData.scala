@@ -1,12 +1,14 @@
 package ru.oseval.datahub
 
 import ru.oseval.datahub.ProductTestData._
+import ru.oseval.datahub.data.{Data, DataOps}
 
 object WarehouseTestData {
   type WarehouseId = String
   type WarehouseClock = String
 
-  case class WarehouseData(products: Map[WarehouseClock, ProductId]) extends Data { self ⇒
+  case class WarehouseData(products: Map[WarehouseClock, ProductId]) extends Data { self =>
+    // since products is grow only then we can compute clock from products map
     override val clock: WarehouseClock = if (products.isEmpty) "0" else products.keySet.maxBy(_.toLong)
   }
 

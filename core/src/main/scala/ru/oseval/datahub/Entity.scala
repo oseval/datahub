@@ -1,5 +1,7 @@
 package ru.oseval.datahub
 
+import ru.oseval.datahub.data.{Data, DataOps}
+
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 

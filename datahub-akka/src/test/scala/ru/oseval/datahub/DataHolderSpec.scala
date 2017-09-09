@@ -5,7 +5,7 @@ import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import org.scalatest
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike}
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
-import ru.oseval.datahub.Data.{GetDifferenceFrom, RelatedDataUpdated}
+import ru.oseval.datahub.data.Data.{GetDifferenceFrom, RelatedDataUpdated}
 import ru.oseval.datahub.Datahub.{DataUpdated, Register}
 
 class DataHolderSpec extends TestKit(ActorSystem("holderTest"))

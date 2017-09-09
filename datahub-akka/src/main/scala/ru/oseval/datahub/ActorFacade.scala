@@ -2,7 +2,7 @@ package ru.oseval.datahub
 
 import akka.actor.{Actor, ActorRef}
 import akka.pattern.ask
-import Data.{GetDifferenceFrom, RelatedDataUpdated}
+import ru.oseval.datahub.data.Data
 
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration

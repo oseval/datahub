@@ -1,5 +1,7 @@
 package ru.oseval.datahub
 
+import ru.oseval.datahub.data.{Data, DataOps}
+
 object ProductTestData {
   type ProductId = String
   type ProductClock = String

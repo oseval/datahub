@@ -1,6 +1,7 @@
 package ru.oseval.datahub
 
 import org.slf4j.LoggerFactory
+import ru.oseval.datahub.data.Data
 
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
@@ -45,6 +46,7 @@ abstract class Datahub(storage: Storage, implicit val ex: ExecutionContext) {
       relationClocks.foreach { case (id, clock) => subscribe(facade, id, Some(clock)) }
 
       storage.getLastId(facade.entity.id).flatMap { lastStoredClockOpt =>
+        val lastStoredClock = lastStoredClockOpt getOrElse facade.entity.ops.zero.clock
         lastStoredClockOpt.foreach(lastStoredClock =>
           if (facade.entity.ops.ordering.gt(lastClock, lastStoredClock))
           // TODO: requiredUpatesFrom? new method to notify all subscribers about update
@@ -93,6 +95,8 @@ abstract class Datahub(storage: Storage, implicit val ex: ExecutionContext) {
     facades.get(relatedId).foreach { related =>
       log.debug("Subscribe entity {} on {} with last known data id {}", facade.entity.id, relatedId, lastKnownDataClockOpt)
 
+      // TODO: since related was register we need to send updates to subscriber from last clock
+      // TODO: even it is not exists in storage - fallback to Datahub state
       storage.getLastId(relatedId).foreach(_.foreach { lastClock =>
         val lastKnownDataClock = lastKnownDataClockOpt getOrElse related.entity.ops.zero.clock
 

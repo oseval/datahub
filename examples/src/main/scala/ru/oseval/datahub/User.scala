@@ -4,6 +4,7 @@ import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.pattern.{ask, pipe}
 import akka.util.Timeout
 import ru.oseval.datahub.User.{ChangeName, UserData, UserEntity}
+import ru.oseval.datahub.data.{Data, DataOps}
 
 import scala.concurrent.duration._
 

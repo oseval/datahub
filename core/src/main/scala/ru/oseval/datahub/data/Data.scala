@@ -1,4 +1,4 @@
-package ru.oseval.datahub
+package ru.oseval.datahub.data
 
 object Data {
   sealed trait DataMessage
@@ -19,12 +19,21 @@ trait Data {
 }
 
 /**
-  * Any data which must apply updates continually (without gaps).
-  * To make it associative and found gaps it has [[NotAssociativeData.previousId]].
+  * When you want to be sure that your data will reach a destination.
+  * Such data is data which sends by partial updates (elements of a list for example)
+  * To achieve this guarantee and found gaps it has [[NotAssociativeData.previousId]].
   */
-trait NotAssociativeData extends Data {
+trait AtLeastOnceData extends Data {
   val previousClock: String
-  def isCombinableTo[D <: NotAssociativeData](that: D, other: D): Boolean = other.previousClock == that.clock
+}
+
+/**
+  * Any data which must apply updates continually (without gaps).
+  */
+trait NotAssociativeData extends AtLeastOnceData
+
+class SeqData[T] {
+  val underline: Seq[T]
 }
 
 abstract class DataOps[D <: Data] {

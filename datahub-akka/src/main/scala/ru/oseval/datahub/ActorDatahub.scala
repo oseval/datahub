@@ -5,6 +5,7 @@ import akka.pattern.pipe
 import akka.stream._
 import akka.stream.scaladsl.{Sink, Source}
 import ru.oseval.datahub.Datahub.DatahubMessage
+import ru.oseval.datahub.data.Data
 
 import scala.concurrent.Future
 import scala.concurrent.duration._

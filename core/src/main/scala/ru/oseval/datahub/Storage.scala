@@ -2,6 +2,7 @@ package ru.oseval.datahub
 
 import org.slf4j.Logger
 import ru.oseval.datahub.Datahub.{DataUpdated, DatahubMessage, Register}
+import ru.oseval.datahub.data.Data
 
 import scala.collection.mutable
 import scala.concurrent.Future
@@ -89,7 +90,7 @@ class LocalDataStorage(log: Logger,
         case Some(data) => data
         case None =>
           throw new Exception(
-            "Inconsistent state of localstorage: entity " + entity.id + " does not match to data " + d.getClass.getName
+            "Inconsistent state of local storage: entity " + entity.id + " does not match to data " + d.getClass.getName
           )
       }
     )

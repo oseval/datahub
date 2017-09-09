@@ -5,6 +5,7 @@ import akka.pattern.{ask, pipe}
 import akka.util.Timeout
 import ru.oseval.datahub.Datahub.Register
 import ru.oseval.datahub.User.{UserData, UserEntity, UserOps}
+import ru.oseval.datahub.data.{Data, DataOps}
 
 import scala.collection.mutable
 import scala.concurrent.Future

@@ -12,7 +12,7 @@ import ProductTestData._
 import WarehouseTestData._
 import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
-import ru.oseval.datahub.Data.{GetDifferenceFrom, RelatedDataUpdated}
+import ru.oseval.datahub.data.Data.{GetDifferenceFrom, RelatedDataUpdated}
 
 class DatahubSpec extends TestKit(ActorSystem("notifierTest"))
   with ImplicitSender
