@@ -1,5 +1,7 @@
 package ru.oseval.datahub.data
 
+import ru.oseval.datahub.Entity
+
 object Data {
   sealed trait DataMessage
   case class GetDifferenceFrom(entityId: String, dataClock: String) extends DataMessage
@@ -32,8 +34,49 @@ trait AtLeastOnceData extends Data {
   */
 trait NotAssociativeData extends AtLeastOnceData
 
-class SeqData[T] {
-  val underline: Seq[T]
+class SetDataOps[A](makeId: String => String) extends DataOps[SetData[A]] {
+  override val ordering = new Ordering[String] {
+    override def compare(x: String, y: String) = Ordering.Long.compare(x.toLong, y.toLong)
+  }
+  override val zero = SetData(System.currentTimeMillis.toString, "0", Seq.empty)
+
+  override def combine(a: SetData[A], b: SetData[A]): SetData[A] = {
+    val (first, second) = if (a.clock.toLong > b.clock.toLong) (b, a) else (a, b)
+    if (first.clock == second.previousClock) {
+      SetData(second.clock, first.previousClock)(
+        first.underlying ++ second.underlying,
+        first.removed ++ second.removed,
+        check first.further and combine them with own or second further
+      )
+    } else SetData(first.clock, first.previousClock)(first.underlying, first.removed, first.further combine second)
+
+    val total = a.underlying ++ b.underlying
+    total
+    SetData(a.clock, a.previousClock, b.elements)
+  }
+
+  override def diffFromClock(a: SetData[A], from: String) = ???
+
+  override def getRelations(data: SetData[A]): Set[String] = Set.empty
+
+  override def makeId(ownId: Any) = makeId(ownId)
+}
+
+case class SetData[+A](clock: String, previousClock: String)
+                      (protected[SetDataOps] val underlying: Map[String, A],
+                       removed: Map[String, A],
+                       further: SetData[A]) extends AtLeastOnceData {
+  val elements: Seq[A] = underlying.values.toSeq
+  def +[B >: A](el: B): SetData[B] =
+    SetData(System.currentTimeMillis.toString, clock, elements :+ el)
+
+  def drop[B >: A](el: B): SetData[B] =
+    SetData(System.currentTimeMillis.toString, clock, elements :+ el)
+}
+
+trait SetEntity[A](makeId: String => String) extends Entity {
+  type D <: SetData[A]
+  lazy val ops = new SetDataOps[A](makeId)
 }
 
 abstract class DataOps[D <: Data] {
