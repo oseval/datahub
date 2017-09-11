@@ -38,21 +38,50 @@ class SetDataOps[A](makeId: String => String) extends DataOps[SetData[A]] {
   override val ordering = new Ordering[String] {
     override def compare(x: String, y: String) = Ordering.Long.compare(x.toLong, y.toLong)
   }
-  override val zero = SetData(System.currentTimeMillis.toString, "0", Seq.empty)
+  override val zero = SetData(System.currentTimeMillis.toString, "0")(Map.empty, Map.empty, None)
+
+  override def combineExactly(a: SetData[A], b: SetData[A]): SetData[A] = {
+    val (first, second) = if (a.clock.toLong > b.clock.toLong) (b, a) else (a, b)
+    if (first.clock == second.previousClock) {
+      val visible = SetData(second.clock, first.previousClock)(
+        first.underlying ++ second.underlying,
+        first.removed ++ second.removed,
+        None
+      )
+      val further = (first.further, second.further) match {
+        case (Some(ff), Some(sf)) => Some(combine(ff, sf))
+        case (Some(ff), None) => Some(ff)
+        case (None, Some(sf)) => Some(sf)
+        case (None, None) => None
+      }
+
+      further.map(combine(visible, _)).getOrElse(visible)
+    } else SetData(
+      first.clock, first.previousClock
+    )(first.underlying, first.removed, first.further.map(combine(_, second)).orElse(Some(second)))
+  }
 
   override def combine(a: SetData[A], b: SetData[A]): SetData[A] = {
     val (first, second) = if (a.clock.toLong > b.clock.toLong) (b, a) else (a, b)
-    if (first.clock == second.previousClock) {
-      SetData(second.clock, first.previousClock)(
-        first.underlying ++ second.underlying,
-        first.removed ++ second.removed,
-        check first.further and combine them with own or second further
-      )
-    } else SetData(first.clock, first.previousClock)(first.underlying, first.removed, first.further combine second)
 
-    val total = a.underlying ++ b.underlying
-    total
-    SetData(a.clock, a.previousClock, b.elements)
+    val visible = SetData(second.clock, first.previousClock)(
+      first.underlying ++ second.underlying,
+      first.removed ++ second.removed,
+      None
+    )
+
+    val further = for {
+      ff <- first.further
+      sf <- second.further
+    } yield combine(ff, sf)
+
+    if (first.clock == second.previousClock) {
+
+
+      further.map(combine(visible, _)).getOrElse(visible)
+    } else SetData(
+      first.clock, first.previousClock
+    )(first.underlying, first.removed, first.further.map(combine(_, second)).orElse(Some(second)))
   }
 
   override def diffFromClock(a: SetData[A], from: String) = ???
@@ -63,10 +92,11 @@ class SetDataOps[A](makeId: String => String) extends DataOps[SetData[A]] {
 }
 
 case class SetData[+A](clock: String, previousClock: String)
-                      (protected[SetDataOps] val underlying: Map[String, A],
-                       removed: Map[String, A],
-                       further: SetData[A]) extends AtLeastOnceData {
+                      (private[SetDataOps] val underlying: Map[String, A],
+                       private[SetDataOps] val removed: Map[String, A],
+                       private[SetDataOps] val further: Option[SetData[A]]) extends AtLeastOnceData {
   val elements: Seq[A] = underlying.values.toSeq
+  lazy val isContinious: Boolean = further.isEmpty
   def +[B >: A](el: B): SetData[B] =
     SetData(System.currentTimeMillis.toString, clock, elements :+ el)
 
