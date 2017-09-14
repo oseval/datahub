@@ -2,11 +2,11 @@ package ru.oseval.datahub.data
 
 import ru.oseval.datahub.Entity
 
-class SetDataOps[A](_makeId: String => String) extends DataOps[SetData[A]] {
+class SetDataOps[A](_makeId: Any => String) extends DataOps[SetData[A]] {
   override val ordering = new Ordering[String] {
     override def compare(x: String, y: String) = Ordering.Long.compare(x.toLong, y.toLong)
   }
-  override val zero = SetData(System.currentTimeMillis.toString, "0")(Map.empty, Map.empty, None)
+  override val zero = SetData[A](System.currentTimeMillis.toString, "0")(Map.empty, Map.empty, None)
 
   //  override def combineExactly(a: SetData[A], b: SetData[A]): SetData[A] = {
   //    val (first, second) = if (a.clock.toLong > b.clock.toLong) (b, a) else (a, b)
@@ -75,9 +75,9 @@ class SetDataOps[A](_makeId: String => String) extends DataOps[SetData[A]] {
 }
 
 case class SetData[+A](clock: String, previousClock: String)
-                      (private[SetDataOps] val underlying: Map[String, A],
-                       private[SetDataOps] val removed: Map[String, A],
-                       private[SetDataOps] val further: Option[SetData[A]]) extends AtLeastOnceData {
+                      (private[data] val underlying: Map[String, A],
+                       private[data] val removed: Map[String, A],
+                       private[data] val further: Option[SetData[A]]) extends AtLeastOnceData {
   val elements: Seq[A] = underlying.values.toSeq
   lazy val isContinious: Boolean = further.isEmpty
   def +[B >: A](el: B): SetData[B] = {
@@ -91,7 +91,7 @@ case class SetData[+A](clock: String, previousClock: String)
   }
 }
 
-abstract class SetEntity[A](makeId: String => String) extends Entity {
+abstract class SetEntity[A](makeId: Any => String) extends Entity {
   type D <: SetData[A]
-  lazy val ops = new SetDataOps[A](makeId)
+  override lazy val ops = new SetDataOps[A](makeId)
 }
