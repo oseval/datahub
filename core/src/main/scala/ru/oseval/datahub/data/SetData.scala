@@ -78,20 +78,19 @@ case class SetData[+A](clock: String, previousClock: String)
                       (private[data] val underlying: Map[String, A],
                        private[data] val removed: Map[String, A],
                        private[data] val further: Option[SetData[A]]) extends AtLeastOnceData {
-  val elements: Seq[A] = underlying.values.toSeq
+  val elements: Seq[A] = underlying.toList.sortBy(_._1.toLong).map(_._2)
   lazy val isContinious: Boolean = further.isEmpty
   def +[B >: A](el: B): SetData[B] = {
     val newClock = System.currentTimeMillis.toString
-    SetData(newClock, clock)(underlying + (newClock -> el), removed, further)
+    if (clock == newClock) {
+      Thread.sleep(1)
+      this + el
+    }
+    else SetData(newClock, clock)(underlying + (newClock -> el), removed, further)
   }
 
   def drop[B >: A](el: B): SetData[B] = {
     val newClock = System.currentTimeMillis.toString
     SetData(newClock, clock)(underlying, removed.updated(newClock, el), further)
   }
-}
-
-abstract class SetEntity[A](makeId: Any => String) extends Entity {
-  type D <: SetData[A]
-  override lazy val ops = new SetDataOps[A](makeId)
 }
