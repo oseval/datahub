@@ -6,8 +6,6 @@ import ru.oseval.datahub.data.{SetData, SetDataOps}
 class SetDataSpec extends FlatSpecLike with Matchers {
   behavior of "SetData"
 
-  val ops = new SetDataOps[Int]("testset_" + _)
-
   val seedData = 1 to 100
   val data = seedData.grouped(20).map(_.foldLeft(ops.zero)(_ + _))
 
