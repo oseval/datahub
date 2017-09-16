@@ -46,17 +46,18 @@ object SetDataOps {
     )
 }
 
-case class SetData[+A, C](clock: C, previousClock: C)
-                         (private[data] val underlying: Map[C, A],
-                          private[data] val removed: Map[C, A],
-                          private[data] val further: Option[SetData[A, C]]) extends AtLeastOnceData {
+case class SetData[+A, Clk](clock: Clk, previousClock: Clk)
+                           (private[data] val underlying: Map[Clk, A],
+                            private[data] val removed: Map[Clk, A],
+                            private[data] val further: Option[SetData[A, Clk]]) extends AtLeastOnceData {
+  type C = Clk
   val elements: Seq[A] = underlying.toList.map(_._2)
   lazy val isContinious: Boolean = further.isEmpty
-  def add[B >: A](el: B, newClock: C): SetData[B, C] = {
+  def add[B >: A](el: B, newClock: Clk): SetData[B, Clk] = {
     SetData(newClock, clock)(underlying + (newClock -> el), removed, further)
   }
 
-  def drop[B >: A](el: B, newClock: C): SetData[B, C] = {
+  def drop[B >: A](el: B, newClock: Clk): SetData[B, Clk] = {
     SetData(newClock, clock)(underlying, removed.updated(newClock, el), further)
   }
 }

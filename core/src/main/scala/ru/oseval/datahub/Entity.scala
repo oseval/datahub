@@ -6,18 +6,14 @@ import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 
 trait Entity {
-  type D <: Data
+  type ID
   // TODO: add type annotation
-  val ownId: Any
-  val ops: DataOps[D]
+  val ownId: ID
+  val ops: DataOps
 
-  lazy val id: String = ops.makeId(ownId)
+  lazy val id: String = makeId(ownId)
 
-  def matchData(data: Data): Option[D] =
-    if (ops.zero.getClass == data.getClass)
-      Option(data.asInstanceOf[D])
-    else
-      None
+  def makeId(ownId: ID): String
 }
 
 trait EntityFacade {
@@ -28,7 +24,7 @@ trait EntityFacade {
     * @param dataClock
     * @return
     */
-  def getUpdatesFrom(dataClock: String)(implicit timeout: FiniteDuration): Future[entity.D]
+  def getUpdatesFrom(dataClock: entity.ops.D#C)(implicit timeout: FiniteDuration): Future[entity.ops.D]
 
   /**
     * Receives updates of related external data

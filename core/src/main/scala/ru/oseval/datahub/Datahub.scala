@@ -9,15 +9,25 @@ import scala.concurrent.duration._
 
 object Datahub {
   trait Storage {
-    def register(entityId: String, dataClock: String): Future[Unit]
-    def change(entityId: String, dataClock: String): Future[Unit]
-    def getLastId(entityId: String): Future[Option[String]]
+    def register(entityId: String, dataClock: Any): Future[Unit]
+    def change(entityId: String, dataClock: Any): Future[Unit]
+    def getLastClock(entityId: String): Future[Option[String]]
   }
 
   private[datahub] sealed trait DatahubMessage
-  private[datahub] case class Register(dataFacade: EntityFacade,
-                                       lastClock: String,
-                                       relationClocks: Map[String, String]) extends DatahubMessage
+  private[datahub] abstract class Register[F <: EntityFacade](val dataFacade: F, val relationClocks: Map[String, Any]) extends DatahubMessage {
+    val lastClock: dataFacade.entity.ops.D#C
+  }
+  object Register {
+    def apply(dataFacade: EntityFacade, relationClocks: Map[String, Any])
+             (_lastClock: dataFacade.entity.ops.D#C): Register[dataFacade.type] = {
+      new Register[dataFacade.type](dataFacade, relationClocks) {
+        override val lastClock: dataFacade.entity.ops.D#C = _lastClock
+      }
+    }
+    def unapply[F <: EntityFacade](register: Register[F]): Option[(register.dataFacade.type, register.dataFacade.entity.ops.D#C, Map[String, Any])] =
+      Some((register.dataFacade, register.lastClock, register.relationClocks))
+  }
   // TODO: add added and removed relations with their clocks?
   private[datahub] case class DataUpdated(entityId: String, data: Data) extends DatahubMessage
 }
@@ -45,9 +55,10 @@ abstract class Datahub(storage: Storage, implicit val ex: ExecutionContext) {
 
       relationClocks.foreach { case (id, clock) => subscribe(facade, id, Some(clock)) }
 
-      storage.getLastId(facade.entity.id).flatMap { lastStoredClockOpt =>
-        val lastStoredClock = lastStoredClockOpt getOrElse facade.entity.ops.zero.clock
-        lastStoredClockOpt.foreach(lastStoredClock =>
+      storage.getLastClock(facade.entity.id).flatMap { lastStoredClockOpt =>
+        val lastStoredClock =
+          lastStoredClockOpt.flatMap(facade.entity.ops.matchClock) getOrElse facade.entity.ops.zero.clock
+        lastStoredClockOpt.flatMap(facade.entity.ops.matchClock).foreach(lastStoredClock =>
           if (facade.entity.ops.ordering.gt(lastClock, lastStoredClock))
           // TODO: requiredUpatesFrom? new method to notify all subscribers about update
             facade.getUpdatesFrom(lastStoredClock)
@@ -59,7 +70,7 @@ abstract class Datahub(storage: Storage, implicit val ex: ExecutionContext) {
       facades.get(entityId).fold(
         Future.failed[Unit](new Exception("Facade with id=" + entityId + " is not registered"))
       ) { facade =>
-        facade.entity.matchData(_data).fold(
+        facade.entity.ops.matchData(_data).fold(
           Future.failed[Unit](new Exception(
             "Entity " + entityId + " with taken facade " +
               facade.entity.id + " does not match data " + _data.getClass.getName
@@ -83,22 +94,23 @@ abstract class Datahub(storage: Storage, implicit val ex: ExecutionContext) {
       }
   }
 
-  protected def sendChangeToOne(to: EntityFacade, related: Entity)(relatedData: related.D): Future[Unit] =
+  protected def sendChangeToOne(to: EntityFacade, related: Entity)(relatedData: related.ops.D): Future[Unit] =
     to.onUpdate(related.id, relatedData)
 
-  private def subscribe(facade: EntityFacade, relatedId: String, lastKnownDataClockOpt: Option[String]): Unit = {
+  private def subscribe(facade: EntityFacade, relatedId: String, lastKnownDataClockOpt: Option[Any]): Unit = {
     log.debug("subscribe {}, {}, {}", facade.entity.id, relatedId, facades.get(relatedId))
     val relatedSubscriptions = subscriptions.getOrElse(relatedId, Set.empty)
     subscriptions.update(relatedId, relatedSubscriptions + facade.entity.id)
     reverseSubscriptions.update(facade.entity.id, reverseSubscriptions.getOrElse(facade.entity.id, Set.empty) + relatedId)
 
     facades.get(relatedId).foreach { related =>
-      log.debug("Subscribe entity {} on {} with last known data id {}", facade.entity.id, relatedId, lastKnownDataClockOpt)
+      log.debug("Subscribe entity {} on {} with last known related clock {}", facade.entity.id, relatedId, lastKnownDataClockOpt)
 
       // TODO: since related was register we need to send updates to subscriber from last clock
       // TODO: even it is not exists in storage - fallback to Datahub state
-      storage.getLastId(relatedId).foreach(_.foreach { lastClock =>
-        val lastKnownDataClock = lastKnownDataClockOpt getOrElse related.entity.ops.zero.clock
+      storage.getLastClock(relatedId).foreach(_.flatMap(related.entity.ops.matchClock).foreach { lastClock =>
+
+        val lastKnownDataClock = lastKnownDataClockOpt.flatMap(related.entity.ops.matchClock) getOrElse related.entity.ops.zero.clock
 
         log.debug("lastClock {}, lastKnownClock {}, {}",
           Seq(lastClock, lastKnownDataClock, related.entity.ops.ordering.gt(lastClock, lastKnownDataClock))
@@ -133,7 +145,7 @@ class MemoryStorage extends Datahub.Storage {
       ids.update(entityId, dataId)
     }
 
-  def getLastId(entityId: String): Future[Option[String]] = {
+  def getLastClock(entityId: String): Future[Option[String]] = {
     Future.successful(ids.get(entityId))
   }
 }

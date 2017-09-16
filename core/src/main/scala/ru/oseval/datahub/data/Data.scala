@@ -1,7 +1,5 @@
 package ru.oseval.datahub.data
 
-import ru.oseval.datahub.Entity
-
 object Data {
   sealed trait DataMessage
   case class GetDifferenceFrom(entityId: String, dataClock: String) extends DataMessage
@@ -17,7 +15,8 @@ object Data {
   * Idempotent (due to [[Data.clock]] and commutative (due to [[DataOps.ordering]]) data model.
   */
 trait Data {
-  val clock: String
+  type C
+  val clock: C
 }
 
 /**
@@ -26,7 +25,7 @@ trait Data {
   * To achieve this guarantee and found gaps it has [[NotAssociativeData.previousId]].
   */
 trait AtLeastOnceData extends Data {
-  val previousClock: String
+  val previousClock: C
 }
 
 /**
@@ -34,8 +33,10 @@ trait AtLeastOnceData extends Data {
   */
 trait NotAssociativeData extends AtLeastOnceData
 
-abstract class DataOps[D <: Data] {
-  val ordering: Ordering[String]
+abstract class DataOps {
+  type D <: Data
+
+  val ordering: Ordering[D#C]
   /**
    * Data which is initial state for all such entities
    */
@@ -64,5 +65,12 @@ abstract class DataOps[D <: Data] {
     */
   def getRelations(data: D): Set[String]
 
-  def makeId(ownId: Any): String
+  def matchData(data: Data): Option[D] =
+    if (zero.getClass == data.getClass)
+      Option(data.asInstanceOf[D])
+    else
+      None
+
+  // TODO: add trait Clock
+  def matchClock(clock: Any): Option[D#C]
 }

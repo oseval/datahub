@@ -15,7 +15,7 @@ class LocalDataStorage(log: Logger,
   private val relations = mutable.Set.empty[String]
   private val datas = mutable.Map(knownData.map { case (e, v) => e.id -> v }.toSeq: _*)
 
-  def addEntity(entity: Entity)(_data: entity.D): Future[Unit] = {
+  def addEntity(entity: Entity)(_data: entity.ops.D): Future[Unit] = {
     entities.update(entity.id, entity)
     val data = get(entity).getOrElse {
       datas.update(entity.id, _data)
@@ -25,7 +25,7 @@ class LocalDataStorage(log: Logger,
     val relationClocks = entity.ops.getRelations(data)
       .flatMap(id => datas.get(id).map(d => id -> d.clock)).toMap
     // send current clock to avoid unnecessary update sending (from zero to current)
-    notify(Register(createFacade(entity), data.clock, relationClocks))
+    notify(Register(createFacade(entity), relationClocks)(data.clock))
   }
 
   def addRelation(entity: Entity): Unit = {
@@ -84,7 +84,7 @@ class LocalDataStorage(log: Logger,
       }
     }, clock)
 
-  def get[D <: Data](entity: Entity): Option[entity.D] =
+  def get[D <: Data](entity: Entity): Option[entity.ops.D] =
     datas.get(entity.id).map(d =>
       entity.matchData(d) match {
         case Some(data) => data
