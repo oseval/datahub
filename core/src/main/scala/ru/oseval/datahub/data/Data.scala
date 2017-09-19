@@ -4,11 +4,6 @@ object Data {
   sealed trait DataMessage
   case class GetDifferenceFrom(entityId: String, dataClock: String) extends DataMessage
   case class RelatedDataUpdated(toEntityId: String, relatedId: String, data: Data) extends DataMessage
-
-  val timestampOrdering: Ordering[String] = new Ordering[String] {
-    private val impl = implicitly[Ordering[Long]]
-    override def compare(x: String, y: String): Int = impl.compare(x.toLong, y.toLong)
-  }
 }
 
 /**
@@ -56,7 +51,7 @@ abstract class DataOps {
     * @param from
     * @return
     */
-  def diffFromClock(a: D, from: String): D
+  def diffFromClock(a: D, from: D#C): D
 
   /**
     * Returns the entity ids which related to a specified data
@@ -71,6 +66,6 @@ abstract class DataOps {
     else
       None
 
-  // TODO: add trait Clock
-  def matchClock(clock: Any): Option[D#C]
+  def matchClock(clock: Any): Option[D#C] =
+    if (clock.getClass == zero.clock.getClass) Some(clock.asInstanceOf[D#C]) else None
 }

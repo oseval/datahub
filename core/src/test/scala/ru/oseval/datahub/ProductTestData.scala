@@ -4,14 +4,16 @@ import ru.oseval.datahub.data.{Data, DataOps}
 
 object ProductTestData {
   type ProductId = String
-  type ProductClock = String
+  type ProductClock = Long
 
-  case class ProductData(name: String, amount: Int, lastUpdated: Long) extends Data { self ⇒
-    override val clock: ProductClock = lastUpdated.toString
+  case class ProductData(name: String, amount: Int, lastUpdated: Long) extends Data {
+    override type C = Long
+    override val clock: ProductClock = lastUpdated
   }
 
-  object ProductOps extends DataOps[ProductData] {
-    override val ordering: Ordering[ProductClock] = Data.timestampOrdering
+  object ProductOps extends DataOps {
+    override type D = ProductData
+    override val ordering: Ordering[ProductClock] = Ordering.Long
     override val zero: ProductData = ProductData("", 0, 0L)
 
     override def combine(a: ProductData, b: ProductData): ProductData =
@@ -20,12 +22,11 @@ object ProductTestData {
     override def diffFromClock(data: ProductData, from: ProductClock): ProductData = data
 
     override def getRelations(data: ProductData): Set[String] = Set.empty
-
-    override def makeId(ownId: Any): String = "product_" + ownId
   }
 
-  case class ProductEntity(ownId: String) extends Entity {
-    override type D = ProductData
+  case class ProductEntity(ownId: Int) extends Entity {
     val ops = ProductOps
+    override type ID = Int
+    override def makeId(ownId: Int): String = "product_" + ownId
   }
 }

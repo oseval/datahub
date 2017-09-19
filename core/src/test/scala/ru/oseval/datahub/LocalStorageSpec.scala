@@ -18,17 +18,17 @@ class LocalStorageSpec extends FlatSpecLike
   with ScalaFutures
   with Matchers {
 
-  val product1 = ProductEntity("1")
-  val product2 = ProductEntity("2")
-  val product3 = ProductEntity("3")
+  val product1 = ProductEntity(1)
+  val product2 = ProductEntity(2)
+  val product3 = ProductEntity(3)
   val warehouse1 = WarehouseEntity("1")
   val warehouse2 = WarehouseEntity("2")
 
   val product1Data = ProductData("Product1", 4, System.currentTimeMillis)
   val product2Data = ProductData("Product2", 7, System.currentTimeMillis)
   val product3Data = ProductData("Product3", 35, System.currentTimeMillis)
-  val warehouse1Data = WarehouseData(Map(System.currentTimeMillis.toString -> product1.id))
-  val warehouse2Data = WarehouseData(Map(System.currentTimeMillis.toString -> product2.id))
+  val warehouse1Data = WarehouseData(Map(System.currentTimeMillis -> product1.id))
+  val warehouse2Data = WarehouseData(Map(System.currentTimeMillis -> product2.id))
 
   val log = LoggerFactory.getLogger(getClass)
 
@@ -60,7 +60,10 @@ class LocalStorageSpec extends FlatSpecLike
   it should "register entity with right relation clocks" in {
     storage.addEntity(warehouse1)(warehouse1Data).futureValue
 
-    verify(listener).notify(Register(null, warehouse1Data.clock, Map(product1.id -> product1Data.clock)))
+    verify(listener).notify(Register(
+      null.asInstanceOf[EntityFacade { val entity:warehouse1.type }],
+      Map(product1.id -> product1Data.clock)
+    )(warehouse1Data.clock))
   }
 
 //  it should "notify when local entity updated" in {

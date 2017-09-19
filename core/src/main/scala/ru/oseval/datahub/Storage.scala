@@ -15,9 +15,11 @@ class LocalDataStorage(log: Logger,
   private val relations = mutable.Set.empty[String]
   private val datas = mutable.Map(knownData.map { case (e, v) => e.id -> v }.toSeq: _*)
 
+  private def createFacadeDep(e: Entity) = createFacade(e).asInstanceOf[EntityFacade { val entity: e.type }]
+
   def addEntity(entity: Entity)(_data: entity.ops.D): Future[Unit] = {
     entities.update(entity.id, entity)
-    val data = get(entity).getOrElse {
+    val data: entity.ops.D = get(entity).getOrElse {
       datas.update(entity.id, _data)
       _data
     }
@@ -25,7 +27,7 @@ class LocalDataStorage(log: Logger,
     val relationClocks = entity.ops.getRelations(data)
       .flatMap(id => datas.get(id).map(d => id -> d.clock)).toMap
     // send current clock to avoid unnecessary update sending (from zero to current)
-    notify(Register(createFacade(entity), relationClocks)(data.clock))
+    notify(Register(createFacadeDep(entity), relationClocks)(data.clock))
   }
 
   def addRelation(entity: Entity): Unit = {
@@ -36,7 +38,7 @@ class LocalDataStorage(log: Logger,
   def combine(entityId: String, otherData: Data): Future[Unit] =
     entities.get(entityId)
       .map(e =>
-        e.matchData(otherData) match {
+        e.ops.matchData(otherData) match {
           case Some(data) => combine(e)(data)
           case None =>
             Future.failed(new Exception(
@@ -46,7 +48,7 @@ class LocalDataStorage(log: Logger,
       )
       .getOrElse(Future.unit)
 
-  def combine(entity: Entity)(otherData: entity.D): Future[Unit] =
+  def combine(entity: Entity)(otherData: entity.ops.D): Future[Unit] =
     if (relations contains entity.id) {
       val result =
         get(entity)
@@ -76,7 +78,7 @@ class LocalDataStorage(log: Logger,
       notify(DataUpdated(entity.id, otherData))
     }
 
-  def diffFromClock(entity: Entity, clock: String): entity.D =
+  def diffFromClock(entity: Entity)(clock: entity.ops.D#C): entity.ops.D =
     entity.ops.diffFromClock({
       get(entity).getOrElse {
         datas.update(entity.id, entity.ops.zero)
@@ -86,7 +88,7 @@ class LocalDataStorage(log: Logger,
 
   def get[D <: Data](entity: Entity): Option[entity.ops.D] =
     datas.get(entity.id).map(d =>
-      entity.matchData(d) match {
+      entity.ops.matchData(d) match {
         case Some(data) => data
         case None =>
           throw new Exception(

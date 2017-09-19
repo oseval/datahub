@@ -11,7 +11,7 @@ object Datahub {
   trait Storage {
     def register(entityId: String, dataClock: Any): Future[Unit]
     def change(entityId: String, dataClock: Any): Future[Unit]
-    def getLastClock(entityId: String): Future[Option[String]]
+    def getLastClock(entityId: String): Future[Option[Any]]
   }
 
   private[datahub] sealed trait DatahubMessage
@@ -133,19 +133,19 @@ abstract class Datahub(storage: Storage, implicit val ex: ExecutionContext) {
 }
 
 class MemoryStorage extends Datahub.Storage {
-  private val ids = mutable.Map.empty[String, String]
+  private val ids = mutable.Map.empty[String, Any]
 
-  override def register(entityId: String, dataId: String): Future[Unit] =
+  override def register(entityId: String, dataClock: Any): Future[Unit] =
     Future.successful {
-      ids.update(entityId, dataId)
+      ids.update(entityId, dataClock)
     }
 
-  override def change(entityId: String, dataId: String): Future[Unit] =
+  override def change(entityId: String, dataClock: Any): Future[Unit] =
     Future.successful {
-      ids.update(entityId, dataId)
+      ids.update(entityId, dataClock)
     }
 
-  def getLastClock(entityId: String): Future[Option[String]] = {
+  def getLastClock(entityId: String): Future[Option[Any]] = {
     Future.successful(ids.get(entityId))
   }
 }

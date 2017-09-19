@@ -5,15 +5,17 @@ import ru.oseval.datahub.data.{Data, DataOps}
 
 object WarehouseTestData {
   type WarehouseId = String
-  type WarehouseClock = String
+  type WarehouseClock = Long
 
-  case class WarehouseData(products: Map[WarehouseClock, ProductId]) extends Data { self =>
+  case class WarehouseData(products: Map[WarehouseClock, ProductId]) extends Data {
+    override type C = WarehouseClock
     // since products is grow only then we can compute clock from products map
-    override val clock: WarehouseClock = if (products.isEmpty) "0" else products.keySet.maxBy(_.toLong)
+    override val clock: WarehouseClock = if (products.isEmpty) 0L else products.keySet.max
   }
 
-  object WarehouseOps extends DataOps[WarehouseData] {
-    override val ordering: Ordering[WarehouseClock] = Data.timestampOrdering
+  object WarehouseOps extends DataOps {
+    override type D = WarehouseData
+    override val ordering: Ordering[WarehouseClock] = Ordering.Long
     override val zero: WarehouseData = WarehouseData(Map.empty)
 
     override def combine(a: WarehouseData, b: WarehouseData): WarehouseData =
@@ -24,12 +26,11 @@ object WarehouseTestData {
 
     override def getRelations(data: WarehouseData): Set[ProductId] =
       data.products.values.toSet
-
-    override def makeId(ownId: Any): String = "warehouse_" + ownId
   }
 
-  case class WarehouseEntity(ownId: String) extends Entity {
-    override type D = WarehouseData
+  case class WarehouseEntity(ownId: WarehouseId) extends Entity {
+    override type ID = WarehouseId
     val ops = WarehouseOps
+    override def makeId(ownId: WarehouseId): String = "warehouse_" + ownId
   }
 }

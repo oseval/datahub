@@ -7,7 +7,7 @@ class SetDataSpec extends FlatSpecLike with Matchers {
   behavior of "SetData"
 
   val seedData = 1 to 100
-  val data = seedData.grouped(20).map(_.foldLeft(ops.zero)(_ + _))
+  val data = seedData.grouped(20).map(_.foldLeft(SetDataOps.zero.clock)(_ + _))
 
   it should "add elements" in {
     val a = seedData.grouped(20).toList.head.toList
