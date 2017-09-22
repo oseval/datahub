@@ -17,6 +17,10 @@ object Datahub {
   private[datahub] sealed trait DatahubMessage
   private[datahub] abstract class Register[F <: EntityFacade](val dataFacade: F, val relationClocks: Map[String, Any]) extends DatahubMessage {
     val lastClock: dataFacade.entity.ops.D#C
+    override def equals(obj: Any): Boolean = obj match {
+      case o: Register[_] => dataFacade == o.dataFacade && relationClocks == o.relationClocks && lastClock == o.lastClock
+      case _ => super.equals(obj)
+    }
   }
   object Register {
     def apply(dataFacade: EntityFacade, relationClocks: Map[String, Any])

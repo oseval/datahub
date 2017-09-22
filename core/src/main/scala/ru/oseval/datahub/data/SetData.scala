@@ -1,11 +1,13 @@
 package ru.oseval.datahub.data
 
+import scala.collection.SortedMap
+
 object SetDataOps {
-  def zero[A, C](clock: C, previosClock: C) =
-    SetData[A, C](clock, previosClock)(Map.empty, Map.empty, None)
+  def zero[A, C](clock: C, previosClock: C)(implicit ordering: Ordering[C]) =
+    SetData[A, C](clock, previosClock)(SortedMap.empty, SortedMap.empty, None)
 
   def combine[A, C](a: SetData[A, C], b: SetData[A, C])
-                            (implicit ordering: Ordering[C]): SetData[A, C] = {
+                   (implicit ordering: Ordering[C]): SetData[A, C] = {
     val (first, second) = if (ordering.gt(a.clock, b.clock)) (b, a) else (a, b)
 
     if (first.clock == second.previousClock) {
@@ -41,17 +43,17 @@ object SetDataOps {
       ordering.max(from, a.clock)
     )(
       a.underlying.filterKeys(c => ordering.gt(c, from)),
-      a.underlying.filterKeys(c => ordering.gt(c, from)),
+      a.removed.filterKeys(c => ordering.gt(c, from)),
       a.further.map(diffFromClock(_, from))
     )
 }
 
 case class SetData[+A, Clk](clock: Clk, previousClock: Clk)
-                           (private[data] val underlying: Map[Clk, A],
-                            private[data] val removed: Map[Clk, A],
+                           (private[data] val underlying: SortedMap[Clk, A],
+                            private[data] val removed: SortedMap[Clk, A],
                             private[data] val further: Option[SetData[A, Clk]]) extends AtLeastOnceData {
   type C = Clk
-  val elements: Seq[A] = underlying.toList.map(_._2)
+  val elements: Seq[A] = underlying.values.toList
   lazy val isContinious: Boolean = further.isEmpty
   def add[B >: A](el: B, newClock: Clk): SetData[B, Clk] = {
     SetData(newClock, clock)(underlying + (newClock -> el), removed, further)

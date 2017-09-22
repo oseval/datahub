@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory
 import org.mockito.Mockito._
 import ru.oseval.datahub.Datahub.Register
 import ru.oseval.datahub.ProductTestData.{ProductData, ProductEntity}
-import ru.oseval.datahub.WarehouseTestData.{WarehouseData, WarehouseEntity, WarehouseOps}
+import ru.oseval.datahub.WarehouseTestData.{WarehouseData, WarehouseEntity}
 import ru.oseval.datahub.data.Data
 
 import scala.concurrent.Future
@@ -61,7 +61,7 @@ class LocalStorageSpec extends FlatSpecLike
     storage.addEntity(warehouse1)(warehouse1Data).futureValue
 
     verify(listener).notify(Register(
-      null.asInstanceOf[EntityFacade { val entity:warehouse1.type }],
+      null.asInstanceOf[EntityFacade { val entity: warehouse1.type }],
       Map(product1.id -> product1Data.clock)
     )(warehouse1Data.clock))
   }

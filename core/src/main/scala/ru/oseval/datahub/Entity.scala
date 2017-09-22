@@ -7,7 +7,6 @@ import scala.concurrent.duration.FiniteDuration
 
 trait Entity {
   type ID
-  // TODO: add type annotation
   val ownId: ID
   val ops: DataOps
 

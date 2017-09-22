@@ -1,19 +1,26 @@
 package ru.oseval.datahub
 
 import org.scalatest.{FlatSpecLike, Matchers}
-import ru.oseval.datahub.data.{SetData, SetDataOps}
+import ru.oseval.datahub.data.SetDataOps
 
 class SetDataSpec extends FlatSpecLike with Matchers {
   behavior of "SetData"
 
-  val seedData = 1 to 100
-  val data = seedData.grouped(20).map(_.foldLeft(SetDataOps.zero.clock)(_ + _))
+  val zeroData = SetDataOps.zero[Int, Long](0L, 0L)
+
+  val seedData = 1 to 60
 
   it should "add elements" in {
-    val a = seedData.grouped(20).toList.head.toList
-    println((ops.zero + 1 + 2 + 3 + 4 elements))
-
-    val res = data.toList.permutations.foldLeft(ops.zero)((r, s) => s.fold(ops.zero)(ops.combine))
+    val data = seedData.grouped(20).map(_.foldLeft(zeroData)((data, i) => data.add(i, System.nanoTime))).toList
+    val res = (data ++ data).permutations.foldLeft(zeroData)((r, s) => s.fold(zeroData)(SetDataOps.combine))
     res.elements shouldBe seedData.toList
+  }
+
+  it should "add and remove elements" in {
+    val data = seedData.grouped(20).map(_.foldLeft(zeroData)((data, i) =>
+      if (i % 3 == 1) data.drop(i - 1, System.nanoTime) else data.add(i, System.nanoTime)
+    )).toList
+    val res = (data ++ data).permutations.foldLeft(zeroData)((r, s) => s.fold(zeroData)(SetDataOps.combine))
+    res.elements shouldBe seedData.filterNot(_ % 3 == 1).toList
   }
 }

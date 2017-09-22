@@ -48,13 +48,14 @@ class DatahubSpec extends FlatSpecLike
     val warehouse = WarehouseEntity("Warehouse1")
     val warehouseFacade = mock[EntityFacade { val entity: warehouse.type }]
     when(warehouseFacade.entity).thenReturn(warehouse)
-    val warehouseData = WarehouseData(Map(System.currentTimeMillis -> product.id))
+    val knownClocks = System.currentTimeMillis
+    val warehouseData = WarehouseData(Map(knownClocks -> product.id))
 
     // Register product
     datahub.receive(Register(productFacade, Map.empty)(productData.clock)).futureValue
 
     // Product entity data is updated
-    val newProductData = ProductData("TV", 1, System.currentTimeMillis)
+    val newProductData = ProductData("TV", 1, knownClocks + 1L)
 
     datahub.receive(DataUpdated(product.id, newProductData)).futureValue
 
@@ -62,7 +63,7 @@ class DatahubSpec extends FlatSpecLike
     when(productFacade.getUpdatesFrom(productData.clock)).thenReturn(Future.successful(newProductData))
     when(warehouseFacade.onUpdate(product.id, newProductData)).thenReturn(Future.unit)
 
-    val warehouseRegisterRes = datahub.receive(
+    datahub.receive(
       Register(warehouseFacade, Map(product.id -> ProductOps.zero.clock))(warehouseData.clock)
     )
 
