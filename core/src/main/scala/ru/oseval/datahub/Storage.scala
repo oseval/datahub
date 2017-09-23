@@ -6,6 +6,7 @@ import ru.oseval.datahub.data.Data
 
 import scala.collection.mutable
 import scala.concurrent.Future
+import scala.reflect.ClassTag
 
 class LocalDataStorage(log: Logger,
                        createFacade: Entity => EntityFacade,
@@ -85,6 +86,11 @@ class LocalDataStorage(log: Logger,
         entity.ops.zero
       }
     }, clock)
+
+  def get[D <: Data: ClassTag](entityId: String)(implicit tag: ClassTag[D]): Option[D] =
+    datas.get(entityId).flatMap(d =>
+      if (tag.runtimeClass.isAssignableFrom(d.getClass)) Some(tag.runtimeClass.cast(d).asInstanceOf[D]) else None
+    )
 
   def get[D <: Data](entity: Entity): Option[entity.ops.D] =
     datas.get(entity.id).map(d =>

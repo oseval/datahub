@@ -20,14 +20,10 @@ class LocalStorageSpec extends FlatSpecLike
 
   val product1 = ProductEntity(1)
   val product2 = ProductEntity(2)
-  val product3 = ProductEntity(3)
   val warehouse1 = WarehouseEntity("1")
-  val warehouse2 = WarehouseEntity("2")
 
   val time = System.currentTimeMillis
   val product1Data = ProductData("Product1", 4, time)
-  val product2Data = ProductData("Product2", 7, time + 1)
-  val product3Data = ProductData("Product3", 35, time + 2)
   val warehouseData1 = WarehouseData(Map((time + 3) -> product1.id))
   val warehouseData2 = WarehouseData(Map((time + 4) -> product2.id))
   val warehouseDataTotal = WarehouseData(Map((time + 3) -> product1.id, (time + 4) -> product2.id))
@@ -74,5 +70,7 @@ class LocalStorageSpec extends FlatSpecLike
     verify(listener).notify(DataUpdated(warehouse1.id, warehouseData2))
 
     storage.get(warehouse1) shouldBe Some(warehouseDataTotal)
+    storage.get[ProductData](product1.id) shouldBe Some(product1Data)
+    storage.get[ProductData](product2.id) shouldBe None
   }
 }

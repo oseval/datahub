@@ -61,8 +61,8 @@ abstract class DataOps {
   def getRelations(data: D): Set[String]
 
   def matchData(data: Data): Option[D] =
-    if (zero.getClass == data.getClass)
-      Option(data.asInstanceOf[D])
+    if (zero.getClass.isAssignableFrom(data.getClass))
+      Option(zero.getClass.cast(data))
     else
       None
 
