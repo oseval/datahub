@@ -6,7 +6,7 @@ import ru.oseval.datahub.data.SetDataOps
 class SetDataSpec extends FlatSpecLike with Matchers {
   behavior of "SetData"
 
-  val zeroData = SetDataOps.zero[Int, Long](0L, 0L)
+  val zeroData = SetDataOps.zero[Int, Long](0L, System.nanoTime)
 
   val seedData = 1 to 60
 

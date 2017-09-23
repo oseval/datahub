@@ -6,7 +6,7 @@ import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mockito.MockitoSugar
 import org.slf4j.LoggerFactory
 import org.mockito.Mockito._
-import ru.oseval.datahub.Datahub.Register
+import ru.oseval.datahub.Datahub.{DataUpdated, Register}
 import ru.oseval.datahub.ProductTestData.{ProductData, ProductEntity}
 import ru.oseval.datahub.WarehouseTestData.{WarehouseData, WarehouseEntity}
 import ru.oseval.datahub.data.Data
@@ -24,11 +24,13 @@ class LocalStorageSpec extends FlatSpecLike
   val warehouse1 = WarehouseEntity("1")
   val warehouse2 = WarehouseEntity("2")
 
-  val product1Data = ProductData("Product1", 4, System.currentTimeMillis)
-  val product2Data = ProductData("Product2", 7, System.currentTimeMillis)
-  val product3Data = ProductData("Product3", 35, System.currentTimeMillis)
-  val warehouse1Data = WarehouseData(Map(System.currentTimeMillis -> product1.id))
-  val warehouse2Data = WarehouseData(Map(System.currentTimeMillis -> product2.id))
+  val time = System.currentTimeMillis
+  val product1Data = ProductData("Product1", 4, time)
+  val product2Data = ProductData("Product2", 7, time + 1)
+  val product3Data = ProductData("Product3", 35, time + 2)
+  val warehouseData1 = WarehouseData(Map((time + 3) -> product1.id))
+  val warehouseData2 = WarehouseData(Map((time + 4) -> product2.id))
+  val warehouseDataTotal = WarehouseData(Map((time + 3) -> product1.id, (time + 4) -> product2.id))
 
   val log = LoggerFactory.getLogger(getClass)
 
@@ -58,16 +60,19 @@ class LocalStorageSpec extends FlatSpecLike
   }
 
   it should "register entity with right relation clocks" in {
-    storage.addEntity(warehouse1)(warehouse1Data).futureValue
+    storage.addEntity(warehouse1)(warehouseData1).futureValue
 
     verify(listener).notify(Register(
       null.asInstanceOf[EntityFacade { val entity: warehouse1.type }],
       Map(product1.id -> product1Data.clock)
-    )(warehouse1Data.clock))
+    )(warehouseData1.clock))
   }
 
-//  it should "notify when local entity updated" in {
-//    val newWarehouse1Data = WarehouseData()
-//    storage.combine(warehouse1)()
-//  }
+  it should "notify when local entity updated" in {
+    storage.combine(warehouse1.id, warehouseData2).futureValue
+
+    verify(listener).notify(DataUpdated(warehouse1.id, warehouseData2))
+
+    storage.get(warehouse1) shouldBe Some(warehouseDataTotal)
+  }
 }

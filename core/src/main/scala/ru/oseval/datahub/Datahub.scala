@@ -1,7 +1,7 @@
 package ru.oseval.datahub
 
 import org.slf4j.LoggerFactory
-import ru.oseval.datahub.data.Data
+import ru.oseval.datahub.data.{Data, DataOps}
 
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
@@ -60,10 +60,11 @@ abstract class Datahub(storage: Storage, implicit val ex: ExecutionContext) {
       relationClocks.foreach { case (id, clock) => subscribe(facade, id, Some(clock)) }
 
       storage.getLastClock(facade.entity.id).flatMap { lastStoredClockOpt =>
-        val lastStoredClock =
-          lastStoredClockOpt.flatMap(facade.entity.ops.matchClock) getOrElse facade.entity.ops.zero.clock
-        lastStoredClockOpt.flatMap(facade.entity.ops.matchClock).foreach(lastStoredClock =>
-          if (facade.entity.ops.ordering.gt(lastClock, lastStoredClock))
+        val fops: facade.entity.ops.type = facade.entity.ops
+//        val lastStoredClock =
+//          lastStoredClockOpt.flatMap(fops.matchClock) getOrElse fops.zero.clock
+        lastStoredClockOpt.flatMap(fops.matchClock).foreach(lastStoredClock =>
+          if (fops.ordering.gt(lastClock, lastStoredClock))
           // TODO: requiredUpatesFrom? new method to notify all subscribers about update
             facade.getUpdatesFrom(lastStoredClock)
         )
@@ -110,17 +111,19 @@ abstract class Datahub(storage: Storage, implicit val ex: ExecutionContext) {
     facades.get(relatedId).foreach { related =>
       log.debug("Subscribe entity {} on {} with last known related clock {}", facade.entity.id, relatedId, lastKnownDataClockOpt)
 
+      val relops: related.entity.ops.type = related.entity.ops
+
       // TODO: since related was register we need to send updates to subscriber from last clock
       // TODO: even it is not exists in storage - fallback to Datahub state
-      storage.getLastClock(relatedId).foreach(_.flatMap(related.entity.ops.matchClock).foreach { lastClock =>
+      storage.getLastClock(relatedId).foreach(_.flatMap(relops.matchClock).foreach { lastClock =>
 
-        val lastKnownDataClock = lastKnownDataClockOpt.flatMap(related.entity.ops.matchClock) getOrElse related.entity.ops.zero.clock
+        val lastKnownDataClock = lastKnownDataClockOpt.flatMap(relops.matchClock) getOrElse relops.zero.clock
 
         log.debug("lastClock {}, lastKnownClock {}, {}",
-          Seq(lastClock, lastKnownDataClock, related.entity.ops.ordering.gt(lastClock, lastKnownDataClock))
+          Seq(lastClock, lastKnownDataClock, relops.ordering.gt(lastClock, lastKnownDataClock))
         )
 
-        if (related.entity.ops.ordering.gt(lastClock, lastKnownDataClock))
+        if (relops.ordering.gt(lastClock, lastKnownDataClock))
           related.getUpdatesFrom(lastKnownDataClock).foreach(d =>
             sendChangeToOne(facade, related.entity)(d)
           )

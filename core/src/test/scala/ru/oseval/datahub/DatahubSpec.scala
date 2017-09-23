@@ -65,7 +65,7 @@ class DatahubSpec extends FlatSpecLike
 
     datahub.receive(
       Register(warehouseFacade, Map(product.id -> ProductOps.zero.clock))(warehouseData.clock)
-    )
+    ).futureValue
 
     verify(productFacade).getUpdatesFrom(productData.clock)
     verify(warehouseFacade).onUpdate(product.id, newProductData)

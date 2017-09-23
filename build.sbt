@@ -14,6 +14,7 @@ resolvers ++= Seq(
 val commonSettings = Seq(
   libraryDependencies ++= Seq(
     "org.slf4j" % "slf4j-api" % "1.7.25",
+    "ch.qos.logback" % "logback-classic" % "1.2.3",
     "org.scalatest" %% "scalatest" % "3.0.1" % "test",
     "org.specs" % "specs" % "1.4.3" % "test",
     "org.mockito" % "mockito-all" % "1.10.19" % "test",
