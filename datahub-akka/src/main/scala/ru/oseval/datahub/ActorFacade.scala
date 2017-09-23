@@ -3,13 +3,14 @@ package ru.oseval.datahub
 import akka.actor.{Actor, ActorRef}
 import akka.pattern.ask
 import ru.oseval.datahub.data.Data
+import ru.oseval.datahub.data.Data.{GetDifferenceFrom, RelatedDataUpdated}
 
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 
 case class ActorFacade(entity: Entity, holder: ActorRef) extends EntityFacade {
-  override def getUpdatesFrom(dataClock: String)(implicit timeout: FiniteDuration): Future[entity.D] =
-    holder.ask(GetDifferenceFrom(entity.id, dataClock))(timeout).asInstanceOf[Future[entity.D]]
+  override def getUpdatesFrom(dataClock: entity.ops.D#C)(implicit timeout: FiniteDuration): Future[entity.ops.D] =
+    holder.ask(GetDifferenceFrom(entity.id, dataClock))(timeout).asInstanceOf[Future[entity.ops.D]]
 
   override def onUpdate(relatedId: String, relatedData: Data)(implicit timeout: FiniteDuration): Future[Unit] =
     holder.ask(RelatedDataUpdated(entity.id, relatedId, relatedData))(timeout).mapTo[Unit]
