@@ -5,8 +5,8 @@ import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import org.scalatest
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike}
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
-import ru.oseval.datahub.data.Data.{GetDifferenceFrom, RelatedDataUpdated}
 import ru.oseval.datahub.Datahub.{DataUpdated, Register}
+import ActorFacadeMessages._
 
 class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
   with ImplicitSender
@@ -30,12 +30,12 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
   behavior of "Data holder"
 
   it should "response on get difference from id" in {
-    val product = ProductEntity("1")
+    val product = ProductEntity(1)
     val productHolder = system.actorOf(productProps(product.ownId, notifier.ref))
 
     productHolder ! Ping
     expectMsg(Pong)
-    notifier.expectMsgType[Register]
+    notifier.expectMsgType[Register[_]]
 
     productHolder ! GetDifferenceFrom(product.id, product.ops.zero.clock)
     expectMsgType[ProductData] shouldEqual product.ops.zero
@@ -51,12 +51,12 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
   }
 
   it should "send data update to notifier" in {
-    val product = ProductEntity("2")
+    val product = ProductEntity(2)
     val productHolder = system.actorOf(productProps(product.ownId, notifier.ref))
 
     productHolder ! Ping
     expectMsg(Pong)
-    notifier.expectMsgType[Register]
+    notifier.expectMsgType[Register[_]]
 
     val productData = ProductData("Product name", 1, System.currentTimeMillis)
     productHolder ! UpdateData(productData)
@@ -66,11 +66,11 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
   }
 
   it should "update related data" in {
-    val product = ProductEntity("3")
+    val product = ProductEntity(3)
     val warehouse = WarehouseEntity("1")
     val warehouseHolder = system.actorOf(warehouseProps(warehouse.ownId, notifier.ref))
 
-    notifier.expectMsgType[Register]
+    notifier.expectMsgType[Register[_]]
 
     warehouseHolder ! GetDifferenceFrom(warehouse.id, WarehouseOps.zero.clock)
     expectMsgType[WarehouseData] shouldEqual WarehouseOps.zero

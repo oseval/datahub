@@ -10,14 +10,14 @@ import scala.concurrent.duration._
 object ActorProductTestData {
   import ProductTestData._
 
-  def productProps(productId: String, notifier: ActorRef): Props =
+  def productProps(productId: Int, notifier: ActorRef): Props =
     Props(classOf[ProductActor], productId, notifier)
 
   case object Ping
   case object Pong
   case class UpdateData(data: ProductData)
 
-  private class ProductActor(productId: String, protected val notifier: ActorRef)
+  private class ProductActor(productId: Int, protected val notifier: ActorRef)
     extends Actor with ActorLogging with ActorDataMethods {
     import context.dispatcher
     private implicit val timeout: Timeout = 3.seconds

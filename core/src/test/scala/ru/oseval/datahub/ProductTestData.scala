@@ -3,7 +3,7 @@ package ru.oseval.datahub
 import ru.oseval.datahub.data.{Data, DataOps}
 
 object ProductTestData {
-  type ProductId = String
+  type ProductId = Int
   type ProductClock = Long
 
   case class ProductData(name: String, amount: Int, lastUpdated: Long) extends Data {

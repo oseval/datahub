@@ -12,7 +12,7 @@ import ProductTestData._
 import WarehouseTestData._
 import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
-import ru.oseval.datahub.data.Data.{GetDifferenceFrom, RelatedDataUpdated}
+import ActorFacadeMessages._
 
 class DatahubSpec extends TestKit(ActorSystem("notifierTest"))
   with ImplicitSender
@@ -38,8 +38,8 @@ class DatahubSpec extends TestKit(ActorSystem("notifierTest"))
     val holderProbe = TestProbe("holder")
     val notifier = system.actorOf(ActorDatahub.props(storage))
 
-    val facade = ActorFacade(ProductEntity("Product1"), holderProbe.ref)
-    notifier ! Register(facade, ProductOps.zero.clock, Map.empty)
+    val facade = ActorFacade(ProductEntity(1), holderProbe.ref)
+    notifier ! Register(facade, Map.empty)(facade.entity.ops.zero.clock)
     expectMsgType[Unit]
   }
 
@@ -47,18 +47,18 @@ class DatahubSpec extends TestKit(ActorSystem("notifierTest"))
     val notifier = system.actorOf(ActorDatahub.props(storage))
 
     val productHolderProbe = TestProbe("productHolder")
-    val product = ProductEntity("Product1")
+    val product = ProductEntity(2)
     val productFacade = ActorFacade(product, productHolderProbe.ref)
-    val productData = ProductOps.zero
+    val productData = productFacade.entity.ops.zero
 
     // cache of product data
     val warehouseHolderProbe = TestProbe("warehouseHolder")
     val warehouse = WarehouseEntity("Warehouse1")
     val warehouseFacade = ActorFacade(warehouse, warehouseHolderProbe.ref)
-    val warehouseData = WarehouseData(Map(System.currentTimeMillis.toString -> product.id))
+    val warehouseData = WarehouseData(Map(System.currentTimeMillis -> product.id))
 
     // Register product
-    notifier.ask(Register(productFacade, productData.clock, Map.empty)).futureValue
+    notifier.ask(Register(productFacade, Map.empty)(productData.clock)).futureValue
 
     // Product entity data is updated
     val newProductData = ProductData("TV", 1, System.currentTimeMillis)
@@ -67,7 +67,9 @@ class DatahubSpec extends TestKit(ActorSystem("notifierTest"))
 
     // Register warehouse which depends on product, get updates from it
     val warehouseRegisterRes = notifier.ask(
-      Register(warehouseFacade, warehouseData.clock, Map(product.id -> ProductOps.zero.clock))
+      Register(warehouseFacade, Map(product.id -> ProductOps.zero.clock))(
+        warehouseData.clock.asInstanceOf[warehouseFacade.entity.ops.D#C]
+      )
     )
 
     productHolderProbe.expectMsgType[GetDifferenceFrom].dataClock shouldEqual productData.clock
@@ -84,20 +86,25 @@ class DatahubSpec extends TestKit(ActorSystem("notifierTest"))
     val notifier = system.actorOf(ActorDatahub.props(storage))
 
     val productHolderProbe = TestProbe("productHolder")
-    val product = ProductEntity("Product1")
+    val product = ProductEntity(3)
     val productData = ProductOps.zero
+    val productFacade = ActorFacade(product, productHolderProbe.ref)
 
     // cache of product data
     val warehouseHolderProbe = TestProbe("warehouseHolder")
-    val warehouseData = WarehouseData(Map(System.currentTimeMillis.toString -> product.id))
+    val warehouseData = WarehouseData(Map(System.currentTimeMillis -> product.id))
     val warehouseFacade = ActorFacade(WarehouseEntity("Warehouse1"), warehouseHolderProbe.ref)
 
     // Register product
-    notifier ! Register(ActorFacade(product, productHolderProbe.ref), productData.clock, Map.empty)
+    notifier ! Register(productFacade, Map.empty)(
+      productData.clock.asInstanceOf[productFacade.entity.ops.D#C]
+    )
     expectMsgType[Unit]
 
     // Register warehouse which depends on product, get updates from it
-    notifier ! Register(warehouseFacade, warehouseData.clock, Map(product.id → productData.clock))
+    notifier ! Register(warehouseFacade, Map(product.id → productData.clock))(
+      warehouseData.clock.asInstanceOf[warehouseFacade.entity.ops.D#C]
+    )
     expectMsgType[Unit]
 
     // Product entity data is updated
@@ -115,7 +122,8 @@ class DatahubSpec extends TestKit(ActorSystem("notifierTest"))
     val notifier = system.actorOf(ActorDatahub.props(storage))
 
     val productHolderProbe = TestProbe("productHolder")
-    val product = ProductEntity("1")
+    val product = ProductEntity(4)
+    val productFacade = ActorFacade(product, productHolderProbe.ref)
 
     // cache of product data
     val warehouseHolderProbe = TestProbe("warehouseHolder")
@@ -123,13 +131,17 @@ class DatahubSpec extends TestKit(ActorSystem("notifierTest"))
     val warehouseFacade = ActorFacade(warehouse, warehouseHolderProbe.ref)
 
     // Register product
-    notifier.ask(Register(ActorFacade(product, productHolderProbe.ref), ProductOps.zero.clock, Map.empty)).futureValue
+    notifier.ask(Register(productFacade, Map.empty)(
+      ProductOps.zero.clock.asInstanceOf[productFacade.entity.ops.D#C]
+    )).futureValue
 
     // Register warehouse
-    notifier.ask(Register(warehouseFacade, WarehouseOps.zero.clock, Map.empty)).futureValue
+    notifier.ask(Register(warehouseFacade, Map.empty)(
+      WarehouseOps.zero.clock.asInstanceOf[warehouseFacade.entity.ops.D#C]
+    )).futureValue
 
     // Send update with new related entity
-    val newWarehouseData = WarehouseData(Map(System.currentTimeMillis.toString → product.id))
+    val newWarehouseData = WarehouseData(Map(System.currentTimeMillis → product.id))
     notifier.ask(DataUpdated(warehouse.id, newWarehouseData)).futureValue
 
     // Product entity data is updated

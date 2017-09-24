@@ -79,6 +79,9 @@ class LocalDataStorage(log: Logger,
       notify(DataUpdated(entity.id, otherData))
     }
 
+  def diffFromUnknownClock(entity: Entity, clock: Any): entity.ops.D =
+    diffFromClock(entity)(entity.ops.matchClock(clock) getOrElse entity.ops.zero.clock)
+
   def diffFromClock(entity: Entity)(clock: entity.ops.D#C): entity.ops.D =
     entity.ops.diffFromClock({
       get(entity).getOrElse {
@@ -87,7 +90,7 @@ class LocalDataStorage(log: Logger,
       }
     }, clock)
 
-  def get[D <: Data: ClassTag](entityId: String)(implicit tag: ClassTag[D]): Option[D] =
+  def get[D <: Data](entityId: String)(implicit tag: ClassTag[D]): Option[D] =
     datas.get(entityId).flatMap(d =>
       if (tag.runtimeClass.isAssignableFrom(d.getClass)) Some(tag.runtimeClass.cast(d).asInstanceOf[D]) else None
     )

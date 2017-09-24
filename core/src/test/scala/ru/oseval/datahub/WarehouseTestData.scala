@@ -7,7 +7,7 @@ object WarehouseTestData {
   type WarehouseId = String
   type WarehouseClock = Long
 
-  case class WarehouseData(products: Map[WarehouseClock, ProductId]) extends Data {
+  case class WarehouseData(products: Map[WarehouseClock, String]) extends Data {
     override type C = WarehouseClock
     // since products is grow only then we can compute clock from products map
     override val clock: WarehouseClock = if (products.isEmpty) 0L else products.keySet.max
@@ -24,7 +24,7 @@ object WarehouseTestData {
     override def diffFromClock(data: WarehouseData, from: WarehouseClock): WarehouseData =
       WarehouseData(products = data.products.filterKeys(ordering.gt(_, from)))
 
-    override def getRelations(data: WarehouseData): Set[ProductId] =
+    override def getRelations(data: WarehouseData): Set[String] =
       data.products.values.toSet
   }
 

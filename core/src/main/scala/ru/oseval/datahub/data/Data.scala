@@ -1,11 +1,5 @@
 package ru.oseval.datahub.data
 
-object Data {
-  sealed trait DataMessage
-  case class GetDifferenceFrom(entityId: String, dataClock: String) extends DataMessage
-  case class RelatedDataUpdated(toEntityId: String, relatedId: String, data: Data) extends DataMessage
-}
-
 /**
   * Idempotent (due to [[Data.clock]] and commutative (due to [[DataOps.ordering]]) data model.
   */

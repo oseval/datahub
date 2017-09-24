@@ -36,7 +36,7 @@ object ActorWarehouseTestData {
       case AddProduct(productId) =>
         val product = ProductEntity(productId)
         storage.addRelation(product)
-        storage.combine(warehouse)(WarehouseData(products = Map(System.currentTimeMillis.toString → product.id)))
+        storage.combine(warehouse)(WarehouseData(products = Map(System.currentTimeMillis → product.id)))
     }
   }
 }
