@@ -1,6 +1,5 @@
 package ru.oseval.datahub
 
-import ru.oseval.datahub.ProductTestData._
 import ru.oseval.datahub.data.{Data, DataOps}
 
 object WarehouseTestData {
@@ -18,6 +17,8 @@ object WarehouseTestData {
     override val ordering: Ordering[WarehouseClock] = Ordering.Long
     override val zero: WarehouseData = WarehouseData(Map.empty)
 
+    override def makeId(ownId: Any): String = "warehouse_" + ownId
+
     override def combine(a: WarehouseData, b: WarehouseData): WarehouseData =
       WarehouseData(a.products ++ b.products)
 
@@ -31,6 +32,5 @@ object WarehouseTestData {
   case class WarehouseEntity(ownId: WarehouseId) extends Entity {
     override type ID = WarehouseId
     val ops = WarehouseOps
-    override def makeId(ownId: WarehouseId): String = "warehouse_" + ownId
   }
 }

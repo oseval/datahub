@@ -10,9 +10,7 @@ trait Entity {
   val ownId: ID
   val ops: DataOps
 
-  lazy val id: String = makeId(ownId)
-
-  def makeId(ownId: ID): String
+  lazy val id: String = ops.makeId(ownId)
 }
 
 trait EntityFacade {

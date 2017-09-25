@@ -54,6 +54,8 @@ abstract class DataOps {
     */
   def getRelations(data: D): Set[String]
 
+  def makeId(ownId: Any): String
+
   def matchData(data: Data): Option[D] =
     if (zero.getClass.isAssignableFrom(data.getClass))
       Option(zero.getClass.cast(data))

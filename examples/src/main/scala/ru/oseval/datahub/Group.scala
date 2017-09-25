@@ -4,8 +4,8 @@ import akka.actor.{Actor, ActorRef, Props}
 import akka.pattern.{ask, pipe}
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
-import ru.oseval.datahub.User.UserEntity
-import ru.oseval.datahub.data.{Data, DataOps}
+import ru.oseval.datahub.User.{UserEntity, UserOps}
+import ru.oseval.datahub.data.{Data, DataOps, SetData, SetDataOps}
 
 import scala.concurrent.duration._
 
@@ -19,39 +19,34 @@ object Group {
   case object GetMembers
 
   case class GroupData(title: String,
-                       membersAdded: Map[Long, Long],
-                       membersRemoved: Map[Long, Long],
+                       memberSet: SetData[Long, Long],
                        clock: Long) extends Data {
     override type C = Long
-    lazy val members = membersAdded.keySet
+    lazy val members = memberSet.elements.toSet
   }
 
   object GroupOps extends DataOps {
     override type D = GroupData
     override val ordering: Ordering[Long] = Ordering.Long
-    override val zero: GroupData = GroupData("", Map.empty, Map.empty, 0L)
+    override val zero: GroupData = GroupData("", SetDataOps.zero(0L, 0L), 0L)
+    override def makeId(ownId: Any): String = "group_" + ownId
     override def combine(a: GroupData, b: GroupData): GroupData = {
       val (first, second) = if (ordering.gt(a.clock, b.clock)) (b, a) else (a, b)
       GroupData(
         title = if (second.title.nonEmpty) second.title else first.title,
-        membersAdded = first.membersAdded ++ second.membersAdded,
-        membersRemoved = first.membersRemoved ++ second.membersRemoved -- second.membersAdded.keySet,
+        memberSet = SetDataOps.combine(a.memberSet, b.memberSet),
         second.clock
       )
     }
 
     override def diffFromClock(a: GroupData, from: Long): GroupData =
-      a.copy(
-        membersAdded = a.membersAdded.filter { case (_, clock) => ordering.gt(clock, from) },
-        membersRemoved = a.membersRemoved.filter { case (_, clock) => ordering.gt(clock, from) }
-      )
-    override def getRelations(data: GroupData): Set[String] = data.membersAdded.keySet.map("user_" + _)
+      a.copy(memberSet = SetDataOps.diffFromClock(a.memberSet, from))
+    override def getRelations(data: GroupData): Set[String] = data.members.map(UserEntity(_).id)
   }
 
   case class GroupEntity(ownId: String) extends Entity {
     override type ID = String
     override val ops = GroupOps
-    override def makeId(ownId: String): String = "group_" + ownId
   }
 }
 
@@ -65,7 +60,10 @@ private class GroupActor(id: String, title: String, notifier: ActorRef)
   private val group = GroupEntity(id)
   protected val storage = new LocalDataStorage(log, ActorFacade(_, self), notifier.ask(_).mapTo[Unit])
 
-  storage.addEntity(group)(GroupData(title, Map.empty, Map.empty, System.currentTimeMillis))
+  {
+    val currentTime = System.currentTimeMillis
+    storage.addEntity(group)(GroupData(title, SetDataOps.zero(0L, currentTime), currentTime))
+  }
 
   override def receive: Receive = handleDataMessage(group) orElse {
     case GetMembers => sender() ! storage.get(group).map(_.members.toSet).getOrElse(Set.empty)
@@ -73,7 +71,7 @@ private class GroupActor(id: String, title: String, notifier: ActorRef)
       val newClock = System.currentTimeMillis
       storage.addRelation(UserEntity(userId))
       storage.combine(group)(
-        GroupData("", membersAdded = Map(userId -> newClock), membersRemoved = Map.empty, newClock)
+        GroupData("", memberSet = SetDataOps.zero(0L, 0L).add(userId, newClock), newClock)
       ) pipeTo sender()
   }
 }

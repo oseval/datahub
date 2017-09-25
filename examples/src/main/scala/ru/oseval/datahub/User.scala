@@ -31,12 +31,12 @@ object User {
 
     override def diffFromClock(a: UserData, from: Long): UserData = a
     override def getRelations(data: UserData): Set[String] = Set.empty
+    override def makeId(ownId: Any): String = "user_" + ownId
   }
 
   case class UserEntity(ownId: Long) extends Entity {
     override type ID = Long
     override val ops = UserOps
-    override def makeId(ownId: Long): String = "user_" + ownId
   }
 }
 

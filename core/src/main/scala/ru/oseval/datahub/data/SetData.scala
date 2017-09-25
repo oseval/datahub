@@ -10,7 +10,10 @@ object SetDataOps {
                    (implicit ordering: Ordering[C]): SetData[A, C] = {
     val (first, second) = if (ordering.gt(a.clock, b.clock)) (b, a) else (a, b)
 
-    if (first.clock == second.previousClock) {
+    if (first.previousClock > second)
+
+    // intersection
+    if (ordering.gteq(first.clock, second.previousClock)) {
       val visible = SetData(second.clock, first.previousClock)(
         first.underlying ++ second.underlying,
         first.removed ++ second.removed,
@@ -26,7 +29,7 @@ object SetDataOps {
 
 
       further.map(combine(visible, _)).getOrElse(visible)
-    } else
+    } else // further
       SetData(
         first.clock,
         first.previousClock
