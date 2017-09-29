@@ -18,6 +18,9 @@ object ProductTestData {
 
     override def makeId(ownId: Any): String = "product_" + ownId
 
+    override def nextClock(current: ProductClock): ProductClock =
+      System.currentTimeMillis max (current + 1L)
+
     override def combine(a: ProductData, b: ProductData): ProductData =
       if (ordering.gt(a.clock, b.clock)) a else b
 

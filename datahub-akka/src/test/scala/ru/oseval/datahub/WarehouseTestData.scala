@@ -36,7 +36,9 @@ object ActorWarehouseTestData {
       case AddProduct(productId) =>
         val product = ProductEntity(productId)
         storage.addRelation(product)
-        storage.combine(warehouse)(WarehouseData(products = Map(System.currentTimeMillis → product.id)))
+        storage.updateEntity(warehouse) { implicit clockInt => w =>
+          w.copy(products = w.products.updated(System.currentTimeMillis, product.id))
+        }
     }
   }
 }

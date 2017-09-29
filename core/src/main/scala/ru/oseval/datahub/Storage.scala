@@ -2,7 +2,7 @@ package ru.oseval.datahub
 
 import org.slf4j.Logger
 import ru.oseval.datahub.Datahub.{DataUpdated, DatahubMessage, Register}
-import ru.oseval.datahub.data.Data
+import ru.oseval.datahub.data.{ClockInt, Data}
 
 import scala.collection.mutable
 import scala.concurrent.Future
@@ -40,7 +40,7 @@ class LocalDataStorage(log: Logger,
     entities.get(entityId)
       .map(e =>
         e.ops.matchData(otherData) match {
-          case Some(data) => combine(e)(data)
+          case Some(data) => combineRelation(e)(data)
           case None =>
             Future.failed(new Exception(
               "Data " + otherData.getClass.getName + " does not match with entity " + e.getClass.getName
@@ -49,7 +49,7 @@ class LocalDataStorage(log: Logger,
       )
       .getOrElse(Future.unit)
 
-  def combine(entity: Entity)(otherData: entity.ops.D): Future[Unit] =
+  private def combineRelation(entity: Entity)(otherData: entity.ops.D): Future[Unit] =
     if (relations contains entity.id) {
       val result =
         get(entity)
@@ -60,24 +60,32 @@ class LocalDataStorage(log: Logger,
 
       Future.unit
     } else {
-      get(entity).map { before ⇒
+      Future.unit
+
+    }
+
+  def updateEntity(entity: Entity)
+                  (upd: ClockInt[entity.ops.D#C] => entity.ops.D => entity.ops.D): Future[Unit] = {
+    val curData = get(entity).getOrElse(entity.ops.zero)
+    val updated = upd(ClockInt(entity.ops.nextClock(curData.clock), curData.clock))(curData)
+
+    if (entities isDefinedAt entity.id) {
+      get(entity).foreach { before =>
         val relatedBefore = entity.ops getRelations before
 
-        val after = entity.ops.combine(before, otherData)
-        datas.update(entity.id, after)
+        val relatedAfter = entity.ops getRelations updated
 
-        val relatedAfter = entity.ops getRelations after
-
-        relations ++= (entity.ops getRelations otherData)
+        relations ++= (entity.ops getRelations updated)
         relations --= (relatedBefore -- relatedAfter)
 
         datas --= (relatedBefore -- relatedAfter)
-      }.getOrElse {
-        datas.update(entity.id, otherData)
       }
 
-      notify(DataUpdated(entity.id, otherData))
-    }
+      datas.update(entity.id, updated)
+
+      notify(DataUpdated(entity.id, updated))
+    } else addEntity(entity)(updated)
+  }
 
   def diffFromUnknownClock(entity: Entity, clock: Any): entity.ops.D =
     diffFromClock(entity)(entity.ops.matchClock(clock) getOrElse entity.ops.zero.clock)

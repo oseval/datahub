@@ -30,7 +30,8 @@ object ActorProductTestData {
 
     override def receive: Receive = handleDataMessage(product) orElse {
       case Ping => sender() ! Pong
-      case UpdateData(updated) => storage.combine(product)(updated) pipeTo sender()
+      case UpdateData(updated) =>
+        storage.updateEntity(product)(_ => _ => updated) pipeTo sender()
     }
   }
 }

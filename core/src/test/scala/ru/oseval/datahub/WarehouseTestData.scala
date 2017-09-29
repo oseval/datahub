@@ -19,6 +19,9 @@ object WarehouseTestData {
 
     override def makeId(ownId: Any): String = "warehouse_" + ownId
 
+    override def nextClock(current: WarehouseClock): WarehouseClock =
+      System.currentTimeMillis max (current + 1L)
+
     override def combine(a: WarehouseData, b: WarehouseData): WarehouseData =
       WarehouseData(a.products ++ b.products)
 

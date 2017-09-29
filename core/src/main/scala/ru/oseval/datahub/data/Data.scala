@@ -11,16 +11,26 @@ trait Data {
 /**
   * When you want to be sure that your data will reach a destination.
   * Such data is data which sends by partial updates (elements of a list for example)
-  * To achieve this guarantee and found gaps it has [[NotAssociativeData.previousId]].
+  * To achieve this guarantee and found gaps it has [[AtLeastOnceData.previousClock]].
+  * Data integrity could be checked by [[AtLeastOnceData.isSolid]] param.
   */
 trait AtLeastOnceData extends Data {
   val previousClock: C
+  val isSolid: Boolean
 }
 
 /**
   * Any data which must apply updates continually (without gaps).
   */
 trait NotAssociativeData extends AtLeastOnceData
+
+/**
+  * If your data is compound from some other datas then you can use this trait to automate data flow
+  */
+trait CompoundData extends AtLeastOnceData {
+  protected val children: Set[Data]
+  override lazy val isSolid: Boolean = children.forall { case d: AtLeastOnceData => d.isSolid case _ => true }
+}
 
 abstract class DataOps {
   type D <: Data
@@ -47,6 +57,8 @@ abstract class DataOps {
     */
   def diffFromClock(a: D, from: D#C): D
 
+  def nextClock(current: D#C): D#C
+
   /**
     * Returns the entity ids which related to a specified data
     * @param data
@@ -65,3 +77,5 @@ abstract class DataOps {
   def matchClock(clock: Any): Option[D#C] =
     if (clock.getClass == zero.clock.getClass) Some(clock.asInstanceOf[D#C]) else None
 }
+
+case class ClockInt[C](cur: C, prev: C)
