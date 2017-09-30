@@ -32,6 +32,9 @@ object User {
     override def diffFromClock(a: UserData, from: Long): UserData = a
     override def getRelations(data: UserData): Set[String] = Set.empty
     override def makeId(ownId: Any): String = "user_" + ownId
+
+    override def nextClock(current: Long): Long =
+      System.currentTimeMillis max (current + 1L)
   }
 
   case class UserEntity(ownId: Long) extends Entity {
@@ -54,6 +57,6 @@ private class UserActor(id: Long, name: String, notifier: ActorRef)
 
   override def receive: Receive = handleDataMessage(user) orElse {
     case ChangeName(n) =>
-      storage.combine(user)(UserData(n, System.currentTimeMillis)) pipeTo sender()
+      storage.updateEntity(user)(cint => _.copy(name = n, clock = cint.cur)) pipeTo sender()
   }
 }

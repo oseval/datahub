@@ -32,7 +32,7 @@ object Group {
   object GroupOps extends DataOps {
     override type D = GroupData
     override val ordering: Ordering[Long] = Ordering.Long
-    override val zero: GroupData = GroupData("", SetDataOps.zero(0L, 0L))(ClockInt(0L, 0L))
+    override val zero: GroupData = GroupData("", SetDataOps.zero(ClockInt(0L, 0L), ordering))(ClockInt(0L, 0L))
     override def makeId(ownId: Any): String = "group_" + ownId
     // TODO: add abstract container for combining AtLeastOnceData
     override def combine(a: GroupData, b: GroupData): GroupData = {
@@ -68,8 +68,8 @@ private class GroupActor(id: String, title: String, notifier: ActorRef)
   protected val storage = new LocalDataStorage(log, ActorFacade(_, self), notifier.ask(_).mapTo[Unit])
 
   {
-    val currentTime = System.currentTimeMillis
-    storage.addEntity(group)(GroupData(title, SetDataOps.zero(0L, currentTime))(ClockInt(0L, currentTime)))
+    implicit val cint = ClockInt(0L, System.currentTimeMillis)
+    storage.addEntity(group)(GroupData(title, SetDataOps.zero[Long, Long]))
   }
 
   override def receive: Receive = handleDataMessage(group) orElse {
@@ -77,7 +77,7 @@ private class GroupActor(id: String, title: String, notifier: ActorRef)
     case AddMember(userId) =>
       storage.addRelation(UserEntity(userId))
       storage.updateEntity(group) { implicit clockInt => g =>
-        g.copy(memberSet = g.memberSet.add(userId))
-      }
+        g.copy(memberSet = g.memberSet.add(userId)(clockInt.cur))
+      } pipeTo sender()
   }
 }
