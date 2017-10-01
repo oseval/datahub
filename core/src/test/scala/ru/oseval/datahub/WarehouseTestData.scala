@@ -17,8 +17,6 @@ object WarehouseTestData {
     override val ordering: Ordering[WarehouseClock] = Ordering.Long
     override val zero: WarehouseData = WarehouseData(Map.empty)
 
-    override def makeId(ownId: Any): String = "warehouse_" + ownId
-
     override def nextClock(current: WarehouseClock): WarehouseClock =
       System.currentTimeMillis max (current + 1L)
 
@@ -32,8 +30,8 @@ object WarehouseTestData {
       data.products.values.toSet
   }
 
-  case class WarehouseEntity(ownId: WarehouseId) extends Entity {
-    override type ID = WarehouseId
+  case class WarehouseEntity(warehouseId: WarehouseId) extends Entity {
+    lazy val id: String = "warehouse_" + warehouseId
     val ops = WarehouseOps
   }
 }

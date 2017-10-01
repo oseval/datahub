@@ -3,7 +3,7 @@ package ru.oseval.datahub.data
 /**
   * Idempotent (due to [[Data.clock]] and commutative (due to [[DataOps.ordering]]) data model.
   */
-trait Data {
+trait Data { self =>
   type C
   val clock: C
 }
@@ -22,7 +22,7 @@ trait AtLeastOnceData extends Data {
 /**
   * Any data which must apply updates continually (without gaps).
   */
-trait NotAssociativeData extends AtLeastOnceData
+trait ContinuedData extends AtLeastOnceData
 
 /**
   * If your data is compound from some other datas then you can use this trait to automate data flow
@@ -65,8 +65,6 @@ abstract class DataOps {
     * @return
     */
   def getRelations(data: D): Set[String]
-
-  def makeId(ownId: Any): String
 
   def matchData(data: Data): Option[D] =
     if (zero.getClass.isAssignableFrom(data.getClass))

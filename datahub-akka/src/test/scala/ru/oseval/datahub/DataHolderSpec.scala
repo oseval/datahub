@@ -31,7 +31,7 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
 
   it should "response on get difference from id" in {
     val product = ProductEntity(1)
-    val productHolder = system.actorOf(productProps(product.ownId, notifier.ref))
+    val productHolder = system.actorOf(productProps(product.productId, notifier.ref))
 
     productHolder ! Ping
     expectMsg(Pong)
@@ -52,7 +52,7 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
 
   it should "send data update to notifier" in {
     val product = ProductEntity(2)
-    val productHolder = system.actorOf(productProps(product.ownId, notifier.ref))
+    val productHolder = system.actorOf(productProps(product.productId, notifier.ref))
 
     productHolder ! Ping
     expectMsg(Pong)
@@ -68,14 +68,14 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
   it should "update related data" in {
     val product = ProductEntity(3)
     val warehouse = WarehouseEntity("1")
-    val warehouseHolder = system.actorOf(warehouseProps(warehouse.ownId, notifier.ref))
+    val warehouseHolder = system.actorOf(warehouseProps(warehouse.warehouseId, notifier.ref))
 
     notifier.expectMsgType[Register[_]]
 
     warehouseHolder ! GetDifferenceFrom(warehouse.id, WarehouseOps.zero.clock)
     expectMsgType[WarehouseData] shouldEqual WarehouseOps.zero
 
-    warehouseHolder ! AddProduct(product.ownId)
+    warehouseHolder ! AddProduct(product.productId)
     notifier.expectMsgType[DataUpdated]
     warehouseHolder ! ()
 

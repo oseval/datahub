@@ -16,8 +16,6 @@ object ProductTestData {
     override val ordering: Ordering[ProductClock] = Ordering.Long
     override val zero: ProductData = ProductData("", 0, 0L)
 
-    override def makeId(ownId: Any): String = "product_" + ownId
-
     override def nextClock(current: ProductClock): ProductClock =
       System.currentTimeMillis max (current + 1L)
 
@@ -29,8 +27,8 @@ object ProductTestData {
     override def getRelations(data: ProductData): Set[String] = Set.empty
   }
 
-  case class ProductEntity(ownId: Int) extends Entity {
+  case class ProductEntity(productId: Int) extends Entity {
+    lazy val id: String = "product_" + productId
     val ops = ProductOps
-    override type ID = Int
   }
 }

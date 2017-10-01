@@ -6,11 +6,8 @@ import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 
 trait Entity {
-  type ID
-  val ownId: ID
+  val id: String
   val ops: DataOps
-
-  lazy val id: String = ops.makeId(ownId)
 }
 
 trait EntityFacade {
