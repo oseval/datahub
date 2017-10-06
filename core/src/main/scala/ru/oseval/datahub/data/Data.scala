@@ -6,6 +6,10 @@ package ru.oseval.datahub.data
 trait Data { self =>
   type C
   val clock: C
+  /**
+    * Entity ids which related to the specified data
+    */
+  val relations: Set[String] = Set.empty
 }
 
 /**
@@ -59,13 +63,6 @@ abstract class DataOps {
 
   def nextClock(current: D#C): D#C
 
-  /**
-    * Returns the entity ids which related to a specified data
-    * @param data
-    * @return
-    */
-  def getRelations(data: D): Set[String]
-
   def matchData(data: Data): Option[D] =
     if (zero.getClass.isAssignableFrom(data.getClass))
       Option(zero.getClass.cast(data))
@@ -74,6 +71,8 @@ abstract class DataOps {
 
   def matchClock(clock: Any): Option[D#C] =
     if (clock.getClass == zero.clock.getClass) Some(clock.asInstanceOf[D#C]) else None
+
+  def getRelations(data: D): Set[String]
 }
 
-case class ClockInt[C](cur: C, prev: C)
+case class ClockInt[C](cur: C, prev: C = 0L)

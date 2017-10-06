@@ -65,7 +65,7 @@ class LocalStorageSpec extends FlatSpecLike
   }
 
   it should "notify when local entity updated" in {
-    storage.combine(warehouse1.id, warehouseData2).futureValue
+    storage.combineEntity(warehouse1)(_ => warehouseData2).futureValue
 
     verify(listener).notify(DataUpdated(warehouse1.id, warehouseData2))
 

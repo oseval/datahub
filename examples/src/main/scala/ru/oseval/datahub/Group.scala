@@ -4,7 +4,7 @@ import akka.actor.{Actor, ActorRef, Props}
 import akka.pattern.{ask, pipe}
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
-import ru.oseval.datahub.User.{UserEntity, UserOps}
+import ru.oseval.datahub.User.UserEntity
 import ru.oseval.datahub.data._
 
 import scala.concurrent.duration._
@@ -18,27 +18,14 @@ object Group {
   case class AddMember(userId: Long)
   case object GetMembers
 
-  // it is must effectively-once due to SetData inside
+  // CompoundData as wrapper need so much time - todo it
+
+  // it is must at-least-once due to SetData inside
   case class GroupData(title: String,
                        memberSet: SetData[Long, Long]
                       )(implicit clockInt: ClockInt[Long]) extends CompoundData {
     val clock = clockInt.cur
     val previousClock = clockInt.prev
-
-//    1) data must be an idempotent anyway to merge after diffFromClock - exclude effectively-once - continued
-//
-//    2) for at most we need a clock
-//
-//    3) for at least also prevClock
-//
-//    4) compound data for optimization CompoundData(d1, d2, d3..) zero?
-//
-//    5)
-
-//    g 0  1  2  -  4  5 - optimization by folding empty updates
-//    s 0 01 02 03 34 35
-//
-//    alo 01 12 23
 
     override type C = Long
     lazy val members = memberSet.elements.toSet
@@ -47,10 +34,9 @@ object Group {
 
   object GroupOps extends DataOps {
     override type D = GroupData
-//    impossible without ops
     override val ordering: Ordering[Long] = Ordering.Long
     override val zero: GroupData = GroupData("", SetDataOps.zero(ClockInt(0L, 0L), ordering))(ClockInt(0L, 0L))
-    // TODO: add abstract container for combining AtLeastOnceData
+
     override def combine(a: GroupData, b: GroupData): GroupData = {
       val (first, second) = if (ordering.gt(a.clock, b.clock)) (b, a) else (a, b)
       GroupData(
@@ -62,7 +48,6 @@ object Group {
     override def nextClock(current: Long): Long =
       System.currentTimeMillis max (current + 1L)
 
-//    data must have this two!!!
     override def diffFromClock(a: GroupData, from: Long): GroupData =
       a.copy(memberSet = SetDataOps.diffFromClock(a.memberSet, from))(ClockInt(a.clock, from))
     override def getRelations(data: GroupData): Set[String] = data.members.map(UserEntity(_).id)
@@ -94,7 +79,7 @@ private class GroupActor(id: String, title: String, notifier: ActorRef)
     case AddMember(userId) =>
       storage.addRelation(UserEntity(userId))
       storage.updateEntity(group) { implicit clockInt => g =>
-        g.copy(memberSet = g.memberSet.add(userId)(clockInt.cur))
+        g.copy(memberSet = g.memberSet.add(userId))
       } pipeTo sender()
   }
 }

@@ -55,12 +55,12 @@ case class SetData[+A, Clk](clock: Clk, previousClock: Clk)
   type C = Clk
   val elements: Seq[A] = underlying.values.toList
   override lazy val isSolid: Boolean = further.isEmpty
-  def add[B >: A](el: B)(implicit newClock: Clk): SetData[B, Clk] = {
-    SetData(newClock, clock)(underlying + (newClock -> el), removed, further)
+  def add[B >: A](el: B)(implicit newCint: ClockInt[Clk]): SetData[B, Clk] = {
+    SetData(newCint.cur, clock)(underlying + (newCint.cur -> el), removed, further)
   }
 
-  def drop[B >: A](el: B)(implicit newClock: Clk): SetData[B, Clk] = {
-    SetData(newClock, clock)(underlying, removed.updated(newClock, el), further)
+  def drop[B >: A](el: B)(implicit newCint: ClockInt[Clk]): SetData[B, Clk] = {
+    SetData(newCint.cur, clock)(underlying, removed.updated(newCint.cur, el), further)
   }
 }
 

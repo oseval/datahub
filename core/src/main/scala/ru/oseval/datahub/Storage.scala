@@ -64,7 +64,33 @@ class LocalDataStorage(log: Logger,
 
     }
 
-  def updateEntity(entity: Entity)
+  def combineEntity(entity: Entity)
+                   (upd: entity.ops.D#C => entity.ops.D): Future[Unit] = {
+    val curData = get(entity).getOrElse(entity.ops.zero)
+    val newData = upd(entity.ops.nextClock(curData.clock))
+
+    if (entities isDefinedAt entity.id) {
+      val combined = get(entity).map { before =>
+        val relatedBefore = entity.ops getRelations before
+
+        val after = entity.ops.combine(before, newData)
+
+        val relatedAfter = entity.ops getRelations after
+
+        relations ++= relatedAfter
+        relations --= (relatedBefore -- relatedAfter)
+        datas --= (relatedBefore -- relatedAfter)
+
+        after
+      }.getOrElse(newData)
+
+      datas.update(entity.id, combined)
+
+      notify(DataUpdated(entity.id, newData))
+    } else addEntity(entity)(newData)
+  }
+
+  def upsertEntity(entity: Entity)
                   (upd: ClockInt[entity.ops.D#C] => entity.ops.D => entity.ops.D): Future[Unit] = {
     val curData = get(entity).getOrElse(entity.ops.zero)
     val updated = upd(ClockInt(entity.ops.nextClock(curData.clock), curData.clock))(curData)
