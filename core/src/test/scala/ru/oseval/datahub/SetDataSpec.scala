@@ -6,15 +6,17 @@ import ru.oseval.datahub.data.{ClockInt, SetDataOps}
 class SetDataSpec extends FlatSpecLike with Matchers {
   behavior of "SetData"
 
-  private implicit val cint: ClockInt[Long] = ClockInt(0L, System.currentTimeMillis)
-  private val zeroData = SetDataOps.zero[Int, Long]
+  private implicit val cint: ClockInt[Int] = ClockInt(0, 0)
+  private val zeroData = SetDataOps.zero[Int, Int]
   private val seedData = 1 to 60
 
   it should "add elements" in {
-    val data = seedData.grouped(20).map(_.foldLeft((System.currentTimeMillis, zeroData)) { case ((ctime, d), i) =>
-      val nextTime = System.currentTimeMillis max (ctime + 1L)
-      (nextTime, d.add(i)(ClockInt(cur = nextTime)))
-    }._2).toList
+    val data = seedData.grouped(20).zipWithIndex.map { case (elms, i) =>
+      elms.foldLeft((i*20, zeroData)) { case ((ctime, d), elm) =>
+        val nextTime = ctime + 1
+        (nextTime, d.add(elm)(ClockInt(nextTime, ctime)))
+      }._2
+    }.toList
 
     val res = (data ++ data).permutations.foldLeft(zeroData)((d, s) =>
       s.fold(d)(SetDataOps.combine)
@@ -23,11 +25,14 @@ class SetDataSpec extends FlatSpecLike with Matchers {
   }
 
   it should "add and remove elements" in {
-    val data = seedData.grouped(20).map(_.foldLeft((System.currentTimeMillis, zeroData)) { case ((ctime, d), i) =>
-      val nextTime = System.currentTimeMillis max (ctime + 1L)
-      if (i % 3 == 1) (nextTime, d.drop(i - 1)(ClockInt(cur = nextTime)))
-      else (nextTime, d.add(i)(ClockInt(cur = nextTime)))
-    }._2).toList
+    val data = seedData.grouped(20).zipWithIndex.map { case (elms, i) =>
+      elms.foldLeft((i*20, zeroData)) { case ((ctime, d), elm) =>
+        val nextTime = ctime + 1
+        if (elm % 3 == 1) (nextTime, d.drop(elm - 1)(ClockInt(nextTime, ctime)))
+        else (nextTime, d.add(elm)(ClockInt(nextTime, ctime)))
+      }._2
+    }.toList
+
     val res = (data ++ data).permutations.foldLeft(zeroData)((r, s) => s.fold(zeroData)(SetDataOps.combine))
     res.elements shouldBe seedData.filterNot(_ % 3 == 1).toList
   }

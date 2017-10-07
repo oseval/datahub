@@ -75,4 +75,4 @@ abstract class DataOps {
   def getRelations(data: D): Set[String]
 }
 
-case class ClockInt[C](cur: C, prev: C = 0L)
+case class ClockInt[C](cur: C, prev: C)
