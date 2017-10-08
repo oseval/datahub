@@ -90,24 +90,22 @@ class LocalDataStorage(log: Logger,
     } else addEntity(entity)(newData)
   }
 
-  def upsertEntity(entity: Entity)
+  def updateEntity(entity: Entity)
                   (upd: ClockInt[entity.ops.D#C] => entity.ops.D => entity.ops.D): Future[Unit] = {
-    val curData = get(entity).getOrElse(entity.ops.zero)
-    val updated = upd(ClockInt(entity.ops.nextClock(curData.clock), curData.clock))(curData)
+    val before = get(entity).getOrElse(entity.ops.zero)
+    val updated = upd(ClockInt(entity.ops.nextClock(before.clock), before.clock))(before)
 
     if (entities isDefinedAt entity.id) {
-      get(entity).foreach { before =>
-        val relatedBefore = entity.ops getRelations before
+      val relatedBefore = entity.ops getRelations before
 
-        val relatedAfter = entity.ops getRelations updated
+      val relatedAfter = entity.ops getRelations updated
 
-        relations ++= (entity.ops getRelations updated)
-        relations --= (relatedBefore -- relatedAfter)
+      relations ++= (entity.ops getRelations updated)
+      relations --= (relatedBefore -- relatedAfter)
 
-        datas --= (relatedBefore -- relatedAfter)
-      }
+      datas --= (relatedBefore -- relatedAfter)
 
-      datas.update(entity.id, updated)
+      datas.update(entity.id, entity.ops.diffFromClock(updated, before.clock))
 
       notify(DataUpdated(entity.id, updated))
     } else addEntity(entity)(updated)
