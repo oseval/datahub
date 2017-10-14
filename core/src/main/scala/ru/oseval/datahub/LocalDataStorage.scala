@@ -49,66 +49,55 @@ class LocalDataStorage(log: Logger,
       )
       .getOrElse(Future.unit)
 
-  private def combineRelation(entity: Entity)(otherData: entity.ops.D): Future[Unit] =
+  private def combineRelation(entity: Entity)(update: entity.ops.D): Future[Unit] = {
     if (relations contains entity.id) {
       val result =
         get(entity)
-          .map(entity.ops.combine(_, otherData))
-          .getOrElse(otherData)
+          .map(entity.ops.combine(_, update))
+          .getOrElse(update)
 
       datas.update(entity.id, result)
-
-      Future.unit
     } else {
-      Future.unit
-
+      log.warn("No data for relation {} found", entity.id)
     }
+
+    Future.unit
+  }
+
+  private def applyEntityUpdate(entity: Entity)
+                               (curData: entity.ops.D,
+                                dataUpdate: entity.ops.D,
+                                updatedData: entity.ops.D) =
+    if (entities isDefinedAt entity.id) {
+      val relatedBefore = entity.ops getRelations curData
+
+      val relatedAfter = entity.ops getRelations updatedData
+
+      relations ++= relatedAfter
+      relations --= (relatedBefore -- relatedAfter)
+      datas --= (relatedBefore -- relatedAfter)
+
+      datas.update(entity.id, updatedData)
+
+      notify(DataUpdated(entity.id, dataUpdate))
+    } else addEntity(entity)(updatedData)
 
   def combineEntity(entity: Entity)
                    (upd: entity.ops.D#C => entity.ops.D): Future[Unit] = {
     val curData = get(entity).getOrElse(entity.ops.zero)
-    val newData = upd(entity.ops.nextClock(curData.clock))
+    val dataUpdate = upd(entity.ops.nextClock(curData.clock))
+    val updatedData = entity.ops.combine(curData, dataUpdate)
 
-    if (entities isDefinedAt entity.id) {
-      val combined = get(entity).map { before =>
-        val relatedBefore = entity.ops getRelations before
-
-        val after = entity.ops.combine(before, newData)
-
-        val relatedAfter = entity.ops getRelations after
-
-        relations ++= relatedAfter
-        relations --= (relatedBefore -- relatedAfter)
-        datas --= (relatedBefore -- relatedAfter)
-
-        after
-      }.getOrElse(newData)
-
-      datas.update(entity.id, combined)
-
-      notify(DataUpdated(entity.id, newData))
-    } else addEntity(entity)(newData)
+    applyEntityUpdate(entity)(curData, dataUpdate, updatedData)
   }
 
   def updateEntity(entity: Entity)
                   (upd: ClockInt[entity.ops.D#C] => entity.ops.D => entity.ops.D): Future[Unit] = {
-    val before = get(entity).getOrElse(entity.ops.zero)
-    val updated = upd(ClockInt(entity.ops.nextClock(before.clock), before.clock))(before)
+    val curData = get(entity).getOrElse(entity.ops.zero)
+    val updatedData = upd(ClockInt(entity.ops.nextClock(curData.clock), curData.clock))(curData)
+    val dataUpdate = entity.ops.diffFromClock(updatedData, curData.clock)
 
-    if (entities isDefinedAt entity.id) {
-      val relatedBefore = entity.ops getRelations before
-
-      val relatedAfter = entity.ops getRelations updated
-
-      relations ++= (entity.ops getRelations updated)
-      relations --= (relatedBefore -- relatedAfter)
-
-      datas --= (relatedBefore -- relatedAfter)
-
-      datas.update(entity.id, entity.ops.diffFromClock(updated, before.clock))
-
-      notify(DataUpdated(entity.id, updated))
-    } else addEntity(entity)(updated)
+    applyEntityUpdate(entity)(curData, dataUpdate, updatedData)
   }
 
   def diffFromUnknownClock(entity: Entity, clock: Any): entity.ops.D =

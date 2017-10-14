@@ -70,7 +70,7 @@ private class GroupActor(id: String, title: String, notifier: ActorRef)
   protected val storage = new LocalDataStorage(log, ActorFacade(_, self), notifier.ask(_).mapTo[Unit])
 
   {
-    implicit val cint = ClockInt(0L, System.currentTimeMillis)
+    implicit val cint: ClockInt[Long] = ClockInt(0L, System.currentTimeMillis)
     storage.addEntity(group)(GroupData(title, SetDataOps.zero[Long, Long]))
   }
 
@@ -78,12 +78,6 @@ private class GroupActor(id: String, title: String, notifier: ActorRef)
     case GetMembers => sender() ! storage.get(group).map(_.members.toSet).getOrElse(Set.empty)
     case AddMember(userId) =>
       storage.addRelation(UserEntity(userId))
-
-
-      cases:
-      1) data is eff-once and updated by update( not by copy)
-      2) data is at-most and updated by copy or total data
-      3) data is alo and updated by copy?
 
       storage.updateEntity(group) { implicit clockInt => g =>
         g.copy(memberSet = g.memberSet.add(userId))
