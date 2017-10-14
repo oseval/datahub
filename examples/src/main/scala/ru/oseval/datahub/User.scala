@@ -4,8 +4,8 @@ import akka.actor.{Actor, ActorRef, Props}
 import akka.pattern.{ask, pipe}
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
-import ru.oseval.datahub.User.{ChangeName, UserData, UserEntity}
-import ru.oseval.datahub.data.{Data, DataOps}
+import ru.oseval.datahub.User.{ChangeName, UserEntity}
+import ru.oseval.datahub.data.{ACIData, ACIDataOps}
 
 import scala.concurrent.duration._
 
@@ -17,24 +17,7 @@ object User {
 
   case class ChangeName(newName: String)
 
-  case class UserData(name: String, clock: Long) extends Data {
-    override type C = Long
-  }
-
-  object UserOps extends DataOps {
-    override type D = UserData
-    override val ordering: Ordering[Long] = Ordering.Long
-    override val zero: UserData = UserData("", 0L)
-
-    override def combine(a: UserData, b: UserData): UserData =
-      if (ordering.gt(a.clock, b.clock)) a else b
-
-    override def diffFromClock(a: UserData, from: Long): UserData = a
-    override def getRelations(data: UserData): Set[String] = Set.empty
-
-    override def nextClock(current: Long): Long =
-      System.currentTimeMillis max (current + 1L)
-  }
+  object UserOps extends ACIDataOps[User]()
 
   case class UserEntity(userId: Long) extends Entity {
     lazy val id: String = "user_" + userId
@@ -52,10 +35,10 @@ private class UserActor(id: Long, name: String, notifier: ActorRef)
   private val user = UserEntity(id)
   protected val storage = new LocalDataStorage(log, ActorFacade(_, self), notifier.ask(_).mapTo[Unit])
 
-  storage.addEntity(user)(UserData(name, System.currentTimeMillis))
+  storage.addEntity(user)(ACIData(User(id, name)))
 
   override def receive: Receive = handleDataMessage(user) orElse {
     case ChangeName(n) =>
-      storage.updateEntity(user)(cint => _.copy(name = n, clock = cint.cur)) pipeTo sender()
+      storage.updateEntity(user)(cint => _.updated(User(id, n))) pipeTo sender()
   }
 }

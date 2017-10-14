@@ -14,7 +14,7 @@
 //  override def nextClock(current: Long): Long = EffectivelyOnceContainer.nextClock(current)
 //
 //  override def combine(a: D, b: D): D = {
-//    val (first, second) =  if (a.clock > b.cEffectivelyOnceDataOpslock) (a, b) else (b, a)
+//    val (first, second) =  if (a.clock > b.EffectivelyOnceDataOpslock) (a, b) else (b, a)
 //
 //    if (first.clock == second.previousClock) {
 //      val visible = EffectivelyOnceContainer(

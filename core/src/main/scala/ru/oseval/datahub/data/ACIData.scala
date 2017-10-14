@@ -1,7 +1,12 @@
 package ru.oseval.datahub.data
 
-object ACIDataOps extends DataOps {
-  override type D = ACIData[_]
+object ACIDataOps {
+  def nextClock(current: Long): Long =
+    System.currentTimeMillis max (current + 1L)
+}
+
+class ACIDataOps[A](relations: A => Set[String] = (_: A) => Set.empty[String]) extends DataOps {
+  override type D = ACIData[A]
   override val ordering: Ordering[Long] = Ordering.Long
   override val zero: D = ACIData()
 
@@ -11,17 +16,17 @@ object ACIDataOps extends DataOps {
   override def diffFromClock(a: D, from: Long): D =
     if (a.clock > from) a else zero
 
-  override def getRelations(data: D): Set[String] = Set.empty
+  override def getRelations(data: D): Set[String] = data.data.toSet.flatMap(relations)
 
-  override def nextClock(current: Long): Long =
-    System.currentTimeMillis max (current + 1L)
+  override def nextClock(current: Long): Long = ACIDataOps.nextClock(current)
 }
 
 object ACIData {
-  def apply[A](data: A): ACIData[A] = ACIData(Some(data), System.currentTimeMillis)
+  def apply[A](data: A): ACIData[A] =
+    ACIData(Some(data), System.currentTimeMillis)
 }
 
 case class ACIData[A](data: Option[A] = None, clock: Long = 0L) extends Data {
   override type C = Long
-  def updated(update: A): ACIData[A] = copy(Some(update), ACIDataOps.nextClock(clock))
+  def updated(update: A): ACIData[A] = ACIData(Some(update), ACIDataOps.nextClock(clock))
 }
