@@ -28,5 +28,6 @@ object ACIData {
 
 case class ACIData[A](data: Option[A] = None, clock: Long = 0L) extends Data {
   override type C = Long
+  // TODO: implicit clockint of generic type
   def updated(update: A): ACIData[A] = ACIData(Some(update), ACIDataOps.nextClock(clock))
 }

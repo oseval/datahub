@@ -6,6 +6,7 @@ object SetDataOps {
   def zero[A, C](implicit clockInt: ClockInt[C], ordering: Ordering[C]) =
     SetData[A, C](clockInt.cur, clockInt.prev)(SortedMap.empty, SortedMap.empty, None)
 
+  // TODO: handle instersection also. it must have ability to merge after request missing data
   def combine[A, C](a: SetData[A, C], b: SetData[A, C])
                    (implicit ordering: Ordering[C]): SetData[A, C] = {
     val (first, second) = if (ordering.gt(a.clock, b.clock)) (b, a) else (a, b)
@@ -62,8 +63,4 @@ case class SetData[+A, Clk](clock: Clk, previousClock: Clk)
   def drop[B >: A](el: B)(implicit newCint: ClockInt[Clk]): SetData[B, Clk] = {
     SetData(newCint.cur, clock)(underlying, removed.updated(newCint.cur, el), further)
   }
-}
-
-case class ALOData[D <: Data](clock: Long, previousClock: Long, data: D) {
-
 }
