@@ -1,22 +1,22 @@
 package ru.oseval.datahub.data
 
-object EffOnceData {
+object ALOData {
   def nextClock(current: Long) = System.currentTimeMillis max (current + 1L)
 }
 
-abstract class EffOnceDataOps[A](val getRelations: A => Set[String] = (_: A) => Set.empty) extends DataOps {
-  type D = EffOnceData[A]
+abstract class ALODataOps[A](val getRelations: A => Set[String] = (_: A) => Set.empty) extends DataOps {
+  type D = ALOData[A]
   override val ordering = Ordering.Long
-  override val zero: EffOnceData[A] = EffOnceData[A]()()
+  override val zero: ALOData[A] = ALOData[A]()()
 
-  override def diffFromClock(a: EffOnceData[A], from: Long) =
-    EffOnceData(
+  override def diffFromClock(a: ALOData[A], from: Long) =
+    ALOData(
       a.data.filterKeys(_ > from),
       a.clock,
       from
     )(a.further)
 
-  override def nextClock(current: Long): Long = EffOnceData.nextClock(current)
+  override def nextClock(current: Long): Long = ALOData.nextClock(current)
 
   override def combine(a: D, b: D): D = {
     val (first, second) =  if (a.clock > b.clock) (b, a) else (a, b)
@@ -32,7 +32,7 @@ abstract class EffOnceDataOps[A](val getRelations: A => Set[String] = (_: A) => 
     if (first.clock >= second.previousClock) {
       val visible =
         if (first.previousClock >= second.previousClock) second
-        else EffOnceData(
+        else ALOData(
           data = second.data ++ first.data,
           second.clock,
           first.previousClock
@@ -47,8 +47,8 @@ abstract class EffOnceDataOps[A](val getRelations: A => Set[String] = (_: A) => 
 
       further.map(combine(visible, _)).getOrElse(visible)
     } else // further
-      EffOnceData(
-        first.data,
+      ALOData(
+        second.data ++ first.data,
         first.clock,
         first.previousClock
       )(
@@ -57,16 +57,16 @@ abstract class EffOnceDataOps[A](val getRelations: A => Set[String] = (_: A) => 
   }
 }
 
-case class EffOnceData[A](data: Map[Long, A] = Map.empty[Long, A],
-                          clock: Long = 0L,
-                          previousClock: Long = 0L
-                         )(private[data] val further: Option[EffOnceData[A]] = None)
+case class ALOData[A](data: Map[Long, A] = Map.empty[Long, A],
+                      clock: Long = 0L,
+                      previousClock: Long = 0L
+                     )(private[data] val further: Option[ALOData[A]] = None)
   extends AtLeastOnceData {
   override type C = Long
   val isSolid: Boolean = further.isEmpty
   lazy val elements: Seq[A] = data.values.toList
-  def updated(update: A): EffOnceData[A] = {
-    val newClock = EffOnceData.nextClock(clock)
+  def updated(update: A): ALOData[A] = {
+    val newClock = ALOData.nextClock(clock)
     copy(data.updated(newClock, update), newClock, clock)(None)
   }
 }

@@ -54,8 +54,8 @@ case class SetData[+A, Clk](clock: Clk, previousClock: Clk)
                             private[data] val removed: SortedMap[Clk, A],
                             private[data] val further: Option[SetData[A, Clk]]) extends AtLeastOnceData {
   type C = Clk
-  val elements: Seq[A] = underlying.values.toList
   override lazy val isSolid: Boolean = further.isEmpty
+  lazy val elements: Seq[A] = underlying.values.toList
   def add[B >: A](el: B)(implicit newCint: ClockInt[Clk]): SetData[B, Clk] = {
     SetData(newCint.cur, clock)(underlying + (newCint.cur -> el), removed, further)
   }
