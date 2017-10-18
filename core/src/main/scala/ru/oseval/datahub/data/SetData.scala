@@ -11,12 +11,22 @@ object SetDataOps {
                    (implicit ordering: Ordering[C]): SetData[A, C] = {
     val (first, second) = if (ordering.gt(a.clock, b.clock)) (b, a) else (a, b)
 
-    if (ordering.eq(first.clock, second.previousClock)) {
-      val visible = SetData(second.clock, first.previousClock)(
-        first.underlying ++ second.underlying,
-        first.removed ++ second.removed,
-        None
-      )
+    //    | --- | |---|
+    //
+    //    | --- |
+    //       | --- |
+    //
+    //      | --- |
+    //    | -------- |
+
+    if (ordering.gteq(first.clock, second.previousClock)) {
+      val visible =
+        if (ordering.gteq(first.previousClock, second.previousClock)) second
+        else SetData(second.clock, first.previousClock)(
+          first.underlying ++ second.underlying,
+          first.removed ++ second.removed,
+          None
+        )
 
       val further = (first.further, second.further) match {
         case (Some(ff), Some(sf)) => Some(combine(ff, sf))
