@@ -5,7 +5,7 @@ import akka.pattern.{ask, pipe}
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
 import ru.oseval.datahub.User.{ChangeName, UserEntity}
-import ru.oseval.datahub.data.{ACIData, ACIDataOps}
+import ru.oseval.datahub.data.{ACIData, ACIDataOps, ClockInt}
 
 import scala.concurrent.duration._
 
@@ -35,10 +35,10 @@ private class UserActor(id: Long, name: String, notifier: ActorRef)
   private val user = UserEntity(id)
   protected val storage = new LocalDataStorage(log, ActorFacade(_, self), notifier.ask(_).mapTo[Unit])
 
-  storage.addEntity(user)(ACIData(User(id, name)))
+  storage.addEntity(user)(ACIData(User(id, name), System.currentTimeMillis))
 
   override def receive: Receive = handleDataMessage(user) orElse {
     case ChangeName(n) =>
-      storage.updateEntity(user)(cint => _.updated(User(id, n))) pipeTo sender()
+      storage.combineEntity(user)(ACIData(User(id, n), _)) pipeTo sender()
   }
 }

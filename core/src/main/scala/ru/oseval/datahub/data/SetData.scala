@@ -20,23 +20,25 @@ object SetDataOps {
     //    | -------- |
 
     if (ordering.gteq(first.clock, second.previousClock)) {
-      val visible =
-        if (ordering.gteq(first.previousClock, second.previousClock)) second
-        else SetData(second.clock, first.previousClock)(
+      if (ordering.gteq(first.previousClock, second.previousClock))
+        first.further.map(combine(second, _)).getOrElse(second)
+      else {
+        val visible = SetData(second.clock, first.previousClock)(
           first.underlying ++ second.underlying,
           first.removed ++ second.removed,
           None
         )
 
-      val further = (first.further, second.further) match {
-        case (Some(ff), Some(sf)) => Some(combine(ff, sf))
-        case (Some(ff), None) => Some(ff)
-        case (None, Some(sf)) => Some(sf)
-        case (None, None) => None
+        val further = (first.further, second.further) match {
+          case (Some(ff), Some(sf)) => Some(combine(ff, sf))
+          case (Some(ff), None) => Some(ff)
+          case (None, Some(sf)) => Some(sf)
+          case (None, None) => None
+        }
+
+
+        further.map(combine(visible, _)).getOrElse(visible)
       }
-
-
-      further.map(combine(visible, _)).getOrElse(visible)
     } else // further
       SetData(
         first.clock,

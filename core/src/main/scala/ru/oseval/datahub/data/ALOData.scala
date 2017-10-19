@@ -1,15 +1,17 @@
 package ru.oseval.datahub.data
 
+import scala.collection.SortedMap
+
 object ALOData {
-  def nextClock(current: Long) = System.currentTimeMillis max (current + 1L)
+  def nextClock(current: Long): Long = System.currentTimeMillis max (current + 1L)
 }
 
 abstract class ALODataOps[A](val getRelations: A => Set[String] = (_: A) => Set.empty) extends DataOps {
   type D = ALOData[A]
-  override val ordering = Ordering.Long
+  override val ordering: Ordering.Long.type = Ordering.Long
   override val zero: ALOData[A] = ALOData[A]()()
 
-  override def diffFromClock(a: ALOData[A], from: Long) =
+  override def diffFromClock(a: ALOData[A], from: Long): ALOData[A] =
     ALOData(
       a.data.filterKeys(_ > from),
       a.clock,
@@ -30,22 +32,24 @@ abstract class ALODataOps[A](val getRelations: A => Set[String] = (_: A) => Set.
 //    | -------- |
 
     if (first.clock >= second.previousClock) {
-      val visible =
-        if (first.previousClock >= second.previousClock) second
-        else ALOData(
+      if (first.previousClock >= second.previousClock)
+        first.further.map(combine(second, _)).getOrElse(second)
+      else {
+        val visible = ALOData(
           data = second.data ++ first.data,
           second.clock,
           first.previousClock
         )(None)
 
-      val further = (first.further, second.further) match {
-        case (Some(ff), Some(sf)) => Some(combine(ff, sf))
-        case (Some(ff), None) => Some(ff)
-        case (None, Some(sf)) => Some(sf)
-        case (None, None) => None
-      }
+        val further = (first.further, second.further) match {
+          case (Some(ff), Some(sf)) => Some(combine(ff, sf))
+          case (Some(ff), None) => Some(ff)
+          case (None, Some(sf)) => Some(sf)
+          case (None, None) => None
+        }
 
-      further.map(combine(visible, _)).getOrElse(visible)
+        further.map(combine(visible, _)).getOrElse(visible)
+      }
     } else // further
       ALOData(
         second.data ++ first.data,
@@ -57,7 +61,7 @@ abstract class ALODataOps[A](val getRelations: A => Set[String] = (_: A) => Set.
   }
 }
 
-case class ALOData[A](data: Map[Long, A] = Map.empty[Long, A],
+case class ALOData[A](data: SortedMap[Long, A] = SortedMap.empty[Long, A],
                       clock: Long = 0L,
                       previousClock: Long = 0L
                      )(private[data] val further: Option[ALOData[A]] = None)
