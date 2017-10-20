@@ -56,6 +56,7 @@ class LocalDataStorage(log: Logger,
           .map(entity.ops.combine(_, update))
           .getOrElse(update)
 
+      // TODO: check if data is solid
       datas.update(entity.id, result)
     } else {
       log.warn("No data for relation {} found", entity.id)

@@ -21,12 +21,17 @@ class LocalStorageSpec extends FlatSpecLike
   val product1 = ProductEntity(1)
   val product2 = ProductEntity(2)
   val warehouse1 = WarehouseEntity("1")
+  val warehouse2 = WarehouseEntity("2")
 
   val time = System.currentTimeMillis
   val product1Data = ProductData("Product1", 4, time)
   val warehouseData1 = WarehouseData(Map((time + 3) -> product1.id))
   val warehouseData2 = WarehouseData(Map((time + 4) -> product2.id))
   val warehouseDataTotal = WarehouseData(Map((time + 3) -> product1.id, (time + 4) -> product2.id))
+
+  // TODO: we need at least once data here
+  val warehouse2Data1 = WarehouseData(Map((time + 3) -> product1.id))
+  val warehouse2Data2 = WarehouseData(Map((time + 3) -> product1.id))
 
   val log = LoggerFactory.getLogger(getClass)
 
@@ -53,6 +58,10 @@ class LocalStorageSpec extends FlatSpecLike
     storage.addRelation(product1)
     storage.combine(product1.id, product1Data)
     storage.get(product1) shouldBe Some(product1Data)
+  }
+
+  it should "sync relation when it is not solid" in {
+
   }
 
   it should "register entity with right relation clocks" in {
