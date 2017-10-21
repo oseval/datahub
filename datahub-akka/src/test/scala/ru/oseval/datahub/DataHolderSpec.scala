@@ -7,6 +7,7 @@ import org.scalatest.{BeforeAndAfterAll, FlatSpecLike}
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import ru.oseval.datahub.Datahub.{DataUpdated, Register}
 import ActorFacadeMessages._
+import ru.oseval.datahub.data.ALOData
 
 class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
   with ImplicitSender
@@ -73,14 +74,14 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
     notifier.expectMsgType[Register[_]]
 
     warehouseHolder ! GetDifferenceFrom(warehouse.id, WarehouseOps.zero.clock)
-    expectMsgType[WarehouseData] shouldEqual WarehouseOps.zero
+    expectMsgType[ALOData[String]] shouldEqual WarehouseOps.zero
 
     warehouseHolder ! AddProduct(product.productId)
     notifier.expectMsgType[DataUpdated]
     warehouseHolder ! ()
 
     warehouseHolder ! GetDifferenceFrom(warehouse.id, WarehouseOps.zero.clock)
-    expectMsgType[WarehouseData].products.values should contain(product.id)
+    expectMsgType[ALOData[String]].elements should contain(product.id)
 
     val productData = ProductData("Product name", 1, System.currentTimeMillis)
     warehouseHolder ! RelatedDataUpdated(warehouse.id, product.id, productData)

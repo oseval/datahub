@@ -13,6 +13,7 @@ import WarehouseTestData._
 import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import ActorFacadeMessages._
+import ru.oseval.datahub.data.{ALOData, ClockInt}
 
 class DatahubSpec extends TestKit(ActorSystem("notifierTest"))
   with ImplicitSender
@@ -55,7 +56,7 @@ class DatahubSpec extends TestKit(ActorSystem("notifierTest"))
     val warehouseHolderProbe = TestProbe("warehouseHolder")
     val warehouse = WarehouseEntity("Warehouse1")
     val warehouseFacade = ActorFacade(warehouse, warehouseHolderProbe.ref)
-    val warehouseData = WarehouseData(Map(System.currentTimeMillis -> product.id))
+    val warehouseData = ALOData(product.id)(ClockInt(System.currentTimeMillis, 0L))
 
     // Register product
     notifier.ask(Register(productFacade, Map.empty)(productData.clock)).futureValue
@@ -92,7 +93,7 @@ class DatahubSpec extends TestKit(ActorSystem("notifierTest"))
 
     // cache of product data
     val warehouseHolderProbe = TestProbe("warehouseHolder")
-    val warehouseData = WarehouseData(Map(System.currentTimeMillis -> product.id))
+    val warehouseData = ALOData(product.id)(ClockInt(System.currentTimeMillis, 0L))
     val warehouseFacade = ActorFacade(WarehouseEntity("Warehouse1"), warehouseHolderProbe.ref)
 
     // Register product
@@ -141,7 +142,7 @@ class DatahubSpec extends TestKit(ActorSystem("notifierTest"))
     )).futureValue
 
     // Send update with new related entity
-    val newWarehouseData = WarehouseData(Map(System.currentTimeMillis → product.id))
+    val newWarehouseData = ALOData(product.id)(ClockInt(System.currentTimeMillis, 0L))
     notifier.ask(DataUpdated(warehouse.id, newWarehouseData)).futureValue
 
     // Product entity data is updated

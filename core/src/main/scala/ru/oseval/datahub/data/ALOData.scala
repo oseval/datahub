@@ -2,21 +2,15 @@ package ru.oseval.datahub.data
 
 import scala.collection.SortedMap
 
-object ALOData {
-  def nextClock(current: Long): Long = System.currentTimeMillis max (current + 1L)
-}
-
-abstract class ALODataOps[A](val getRelations: A => Set[String] = (_: A) => Set.empty) extends DataOps {
+abstract class ALODataOps[A](relations: A => Set[String] = (_: A) => Set.empty) extends DataOps {
   type D = ALOData[A]
   override val ordering: Ordering.Long.type = Ordering.Long
-  override val zero: ALOData[A] = ALOData[A]()()
+  override val zero: ALOData[A] = ALOData[A]()
+
+  override def getRelations(data: D): Set[String] = data.data.values.flatMap(relations).toSet
 
   override def diffFromClock(a: ALOData[A], from: Long): ALOData[A] =
-    ALOData(
-      a.data.filterKeys(_ > from),
-      a.clock,
-      from
-    )(a.further)
+    ALOData(a.data.filterKeys(_ > from), a.clock, from, a.further)
 
   override def nextClock(current: Long): Long = ALOData.nextClock(current)
 
@@ -39,7 +33,7 @@ abstract class ALODataOps[A](val getRelations: A => Set[String] = (_: A) => Set.
           data = second.data ++ first.data,
           second.clock,
           first.previousClock
-        )(None)
+        )
 
         val further = (first.further, second.further) match {
           case (Some(ff), Some(sf)) => Some(combine(ff, sf))
@@ -54,23 +48,27 @@ abstract class ALODataOps[A](val getRelations: A => Set[String] = (_: A) => Set.
       ALOData(
         second.data ++ first.data,
         first.clock,
-        first.previousClock
-      )(
+        first.previousClock,
         first.further.map(combine(_, second)).orElse(Some(second))
       )
   }
 }
 
+object ALOData {
+  def apply[A](el: A)(implicit clockInt: ClockInt[Long]): ALOData[A] =
+    ALOData(SortedMap(clockInt.cur -> el), clockInt.cur, clockInt.prev, None)
+  def nextClock(current: Long): Long = System.currentTimeMillis max (current + 1L)
+}
+
 case class ALOData[A](data: SortedMap[Long, A] = SortedMap.empty[Long, A],
-                      clock: Long = 0L,
-                      previousClock: Long = 0L
-                     )(private[data] val further: Option[ALOData[A]] = None)
-  extends AtLeastOnceData {
+                      clock: Long = System.currentTimeMillis,
+                      previousClock: Long = 0L,
+                      private[data] val further: Option[ALOData[A]] = None
+                     ) extends AtLeastOnceData {
   override type C = Long
   val isSolid: Boolean = further.isEmpty
   lazy val elements: Seq[A] = data.values.toList
-  def updated(update: A): ALOData[A] = {
-    val newClock = ALOData.nextClock(clock)
-    copy(data.updated(newClock, update), newClock, clock)(None)
+  def updated(update: A, newClock: Long): ALOData[A] = {
+    copy(data.updated(newClock, update), newClock, clock, None)
   }
 }

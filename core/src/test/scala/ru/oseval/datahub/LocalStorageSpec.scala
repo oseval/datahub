@@ -8,8 +8,8 @@ import org.slf4j.LoggerFactory
 import org.mockito.Mockito._
 import ru.oseval.datahub.Datahub.{DataUpdated, Register}
 import ru.oseval.datahub.ProductTestData.{ProductData, ProductEntity}
-import ru.oseval.datahub.WarehouseTestData.{WarehouseData, WarehouseEntity}
-import ru.oseval.datahub.data.Data
+import ru.oseval.datahub.WarehouseTestData.{WarehouseEntity, WarehouseOps}
+import ru.oseval.datahub.data.{ALOData, ClockInt, Data}
 
 import scala.concurrent.Future
 
@@ -25,13 +25,14 @@ class LocalStorageSpec extends FlatSpecLike
 
   val time = System.currentTimeMillis
   val product1Data = ProductData("Product1", 4, time)
-  val warehouseData1 = WarehouseData(Map((time + 3) -> product1.id))
-  val warehouseData2 = WarehouseData(Map((time + 4) -> product2.id))
-  val warehouseDataTotal = WarehouseData(Map((time + 3) -> product1.id, (time + 4) -> product2.id))
+  val warehouseData1 = ALOData(product1.id)(ClockInt(time + 3, 0L))
+  val warehouseData2 = warehouseData1.updated(product2.id, time + 4)
+  val warehouseDataTotal = WarehouseOps.combine(warehouseData1, warehouseData2)
 
   // TODO: we need at least once data here
-  val warehouse2Data1 = WarehouseData(Map((time + 3) -> product1.id))
-  val warehouse2Data2 = WarehouseData(Map((time + 3) -> product1.id))
+  val warehouse2Data1 = ALOData(product1.id)(ClockInt(time + 3, 0L))
+  val warehouse2Data2 = warehouse2Data1.updated(product1.id, time + 4)
+  val warehouse2Data3 = warehouse2Data2.updated(product1.id, time + 5)
 
   val log = LoggerFactory.getLogger(getClass)
 

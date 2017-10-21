@@ -32,13 +32,11 @@ object ActorWarehouseTestData {
 
     override def receive: Receive = handleDataMessage(warehouse) orElse {
       case Ping => sender() ! Pong
-      case GetProducts => sender() ! storage.get(warehouse).toSeq.flatMap(_.products).toMap
+      case GetProducts => sender() ! storage.get(warehouse).toSeq.flatMap(_.elements)
       case AddProduct(productId) =>
         val product = ProductEntity(productId)
         storage.addRelation(product)
-        storage.updateEntity(warehouse) { implicit clockInt => w =>
-          w.copy(products = w.products.updated(System.currentTimeMillis, product.id))
-        }
+        storage.updateEntity(warehouse)(int => _.updated(product.id, int.cur))
     }
   }
 }
