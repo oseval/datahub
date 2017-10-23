@@ -10,6 +10,7 @@ import scala.concurrent.duration._
 import ProductTestData._
 import WarehouseTestData._
 import org.scalatest.mockito.MockitoSugar
+import ru.oseval.datahub.data.{ALOData, ClockInt}
 
 import scala.concurrent.Future
 
@@ -49,13 +50,13 @@ class DatahubSpec extends FlatSpecLike
     val warehouseFacade = mock[EntityFacade { val entity: warehouse.type }]
     when(warehouseFacade.entity).thenReturn(warehouse)
     val knownClocks = System.currentTimeMillis
-    val warehouseData = WarehouseData(Map(knownClocks -> product.id))
+    val warehouseData = ALOData(product.id)(ClockInt(knownClocks, 0L))
 
     // Register product
     datahub.receive(Register(productFacade, Map.empty)(productData.clock)).futureValue
 
     // Product entity data is updated
-    val newProductData = ProductData("TV", 1, knownClocks + 1L)
+    val newProductData = ProductData("TV", 1, System.currentTimeMillis)
 
     datahub.receive(DataUpdated(product.id, newProductData)).futureValue
 
@@ -81,7 +82,7 @@ class DatahubSpec extends FlatSpecLike
 
     // cache of product data
     val warehouse = WarehouseEntity("Warehouse1")
-    val warehouseData = WarehouseData(Map(System.currentTimeMillis -> product.id))
+    val warehouseData = ALOData(product.id)(ClockInt(System.currentTimeMillis, 0L))
     val warehouseFacade = mock[EntityFacade { val entity: warehouse.type }]
     when(warehouseFacade.entity).thenReturn(warehouse)
 
@@ -117,7 +118,7 @@ class DatahubSpec extends FlatSpecLike
     datahub.receive(Register(warehouseFacade, Map.empty)(warehouseFacade.entity.ops.zero.clock)).futureValue
 
     // Send update with new related entity
-    val newWarehouseData = WarehouseData(Map(System.currentTimeMillis → product.id))
+    val newWarehouseData = ALOData(product.id)(ClockInt(System.currentTimeMillis, 0L))
     datahub.receive(DataUpdated(warehouse.id, newWarehouseData)).futureValue
 
     // Product entity data is updated

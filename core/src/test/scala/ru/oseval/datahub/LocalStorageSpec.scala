@@ -6,7 +6,7 @@ import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mockito.MockitoSugar
 import org.slf4j.LoggerFactory
 import org.mockito.Mockito._
-import ru.oseval.datahub.Datahub.{DataUpdated, Register}
+import ru.oseval.datahub.Datahub.{DataUpdated, Register, SyncRelationClock}
 import ru.oseval.datahub.ProductTestData.{ProductData, ProductEntity}
 import ru.oseval.datahub.WarehouseTestData.{WarehouseEntity, WarehouseOps}
 import ru.oseval.datahub.data.{ALOData, ClockInt, Data}
@@ -29,10 +29,11 @@ class LocalStorageSpec extends FlatSpecLike
   val warehouseData2 = warehouseData1.updated(product2.id, time + 4)
   val warehouseDataTotal = WarehouseOps.combine(warehouseData1, warehouseData2)
 
-  // TODO: we need at least once data here
-  val warehouse2Data1 = ALOData(product1.id)(ClockInt(time + 3, 0L))
-  val warehouse2Data2 = warehouse2Data1.updated(product1.id, time + 4)
-  val warehouse2Data3 = warehouse2Data2.updated(product1.id, time + 5)
+  // need at least once data here because we tests not solid data
+  val time2 = System.currentTimeMillis
+  val warehouse2Data1 = ALOData(warehouse2.id)(ClockInt(time2, 0L))
+  val warehouse2Data2 = warehouse2Data1.updated(product1.id, time2 + 1)
+  val warehouse2Data3 = warehouse2Data2.updated(product1.id, time2 + 2)
 
   val log = LoggerFactory.getLogger(getClass)
 
@@ -62,7 +63,11 @@ class LocalStorageSpec extends FlatSpecLike
   }
 
   it should "sync relation when it is not solid" in {
+    storage.addRelation(warehouse2)
+    storage.combine(warehouse2.id, warehouse2Data1).futureValue
+    storage.combine(warehouse2.id, warehouse2Data3).futureValue
 
+    verify(listener).notify(SyncRelationClock(warehouse2.id, warehouse2Data1.clock))
   }
 
   it should "register entity with right relation clocks" in {
