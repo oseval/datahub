@@ -6,7 +6,7 @@ import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mockito.MockitoSugar
 import org.slf4j.LoggerFactory
 import org.mockito.Mockito._
-import ru.oseval.datahub.Datahub.{DataUpdated, Register, SyncRelationClock}
+import ru.oseval.datahub.Datahub.{DataUpdated, Register, SyncRelationClocks}
 import ru.oseval.datahub.ProductTestData.{ProductData, ProductEntity}
 import ru.oseval.datahub.WarehouseTestData.{WarehouseEntity, WarehouseOps}
 import ru.oseval.datahub.data.{ALOData, ClockInt, Data}
@@ -67,7 +67,8 @@ class LocalStorageSpec extends FlatSpecLike
     storage.combine(warehouse2.id, warehouse2Data1).futureValue
     storage.combine(warehouse2.id, warehouse2Data3).futureValue
 
-    verify(listener).notify(SyncRelationClock(warehouse2.id, warehouse2Data1.clock))
+    storage.checkDataIntegrity shouldBe false
+    verify(listener).notify(SyncRelationClocks(Map(warehouse2.id -> warehouse2Data1.clock)))
   }
 
   it should "register entity with right relation clocks" in {

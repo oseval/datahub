@@ -1,8 +1,8 @@
 package ru.oseval.datahub
 
 import org.slf4j.Logger
-import ru.oseval.datahub.Datahub.{DataUpdated, DatahubMessage, Register}
-import ru.oseval.datahub.data.{ClockInt, Data}
+import ru.oseval.datahub.Datahub.{DataUpdated, DatahubMessage, Register, SyncRelationClocks}
+import ru.oseval.datahub.data.{AtLeastOnceData, ClockInt, Data}
 
 import scala.collection.mutable
 import scala.concurrent.Future
@@ -14,6 +14,7 @@ class LocalDataStorage(log: Logger,
                        knownData: Map[Entity, Data] = Map.empty) {
   private val entities = mutable.Map[String, Entity](knownData.keys.map(e => e.id -> e).toSeq: _*)
   private val relations = mutable.Set.empty[String]
+  private var notSolidRelations = Map.empty[String, Any]
   private val datas = mutable.Map(knownData.map { case (e, v) => e.id -> v }.toSeq: _*)
 
   private def createFacadeDep(e: Entity) = createFacade(e).asInstanceOf[EntityFacade { val entity: e.type }]
@@ -51,13 +52,16 @@ class LocalDataStorage(log: Logger,
 
   private def combineRelation(entity: Entity)(update: entity.ops.D): Future[Unit] = {
     if (relations contains entity.id) {
-      val result =
-        get(entity)
-          .map(entity.ops.combine(_, update))
-          .getOrElse(update)
+      val current = get(entity).getOrElse(entity.ops.zero)
+      val updated = entity.ops.combine(current, update)
 
-      // TODO: check if data is solid
-      datas.update(entity.id, result)
+      updated match {
+        case data: AtLeastOnceData if !data.isSolid =>
+          notSolidRelations = notSolidRelations.updated(entity.id, current.clock)
+        case _ =>
+      }
+
+      datas.update(entity.id, updated)
     } else {
       log.warn("No data for relation {} found", entity.id)
     }
@@ -127,4 +131,14 @@ class LocalDataStorage(log: Logger,
           )
       }
     )
+
+  /**
+    * Calls of this method must be scheduled with an interval
+    * @return
+    */
+  def checkDataIntegrity: Boolean = {
+    if (notSolidRelations.nonEmpty) notify(SyncRelationClocks(notSolidRelations))
+
+    notSolidRelations.isEmpty
+  }
 }
