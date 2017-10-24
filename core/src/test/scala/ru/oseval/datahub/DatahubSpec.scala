@@ -127,4 +127,8 @@ class DatahubSpec extends FlatSpecLike
 
     verify(warehouseFacade).onUpdate(product.id, newProductData)
   }
+
+  it should "request entity and send clocks after sync request" in {
+
+  }
 }
