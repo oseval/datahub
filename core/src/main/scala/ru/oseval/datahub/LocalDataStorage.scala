@@ -14,7 +14,7 @@ class LocalDataStorage(log: Logger,
                        knownData: Map[Entity, Data] = Map.empty) {
   private val entities = mutable.Map[String, Entity](knownData.keys.map(e => e.id -> e).toSeq: _*)
   private val relations = mutable.Set.empty[String]
-  private var notSolidRelations = Map.empty[String, Any]
+  private var notSolidRelations = Map.empty[String, (String, Any)]
   private val datas = mutable.Map(knownData.map { case (e, v) => e.id -> v }.toSeq: _*)
 
   private def createFacadeDep(e: Entity) = createFacade(e).asInstanceOf[EntityFacade { val entity: e.type }]
@@ -37,37 +37,44 @@ class LocalDataStorage(log: Logger,
     relations += entity.id
   }
 
-  def combine(entityId: String, otherData: Data): Future[Unit] =
+  def combineRelation(entityId: String, otherData: Data): Data =
     entities.get(entityId)
       .map(e =>
         e.ops.matchData(otherData) match {
           case Some(data) => combineRelation(e)(data)
           case None =>
-            Future.failed(new Exception(
-              "Data " + otherData.getClass.getName + " does not match with entity " + e.getClass.getName
-            ))
+            log.warn("Data {} does not match with entity {}", otherData.getClass.getName, e.getClass.getName: Any)
+            otherData
         }
-      )
-      .getOrElse(Future.unit)
+      ).getOrElse {
+        log.warn("No data for relation {} found", entityId)
+        otherData
+      }
 
-  private def combineRelation(entity: Entity)(update: entity.ops.D): Future[Unit] = {
+  private def combineRelation(entity: Entity)(update: entity.ops.D): entity.ops.D =
     if (relations contains entity.id) {
       val current = get(entity).getOrElse(entity.ops.zero)
       val updated = entity.ops.combine(current, update)
 
       updated match {
         case data: AtLeastOnceData if !data.isSolid =>
-          notSolidRelations = notSolidRelations.updated(entity.id, current.clock)
+          entities.keys.headOption.foreach { eid =>
+            notSolidRelations = notSolidRelations.updated(
+              entity.id,
+              (eid, current.clock)
+            )
+          }
+
         case _ =>
       }
 
       datas.update(entity.id, updated)
-    } else {
-      log.warn("No data for relation {} found", entity.id)
-    }
 
-    Future.unit
-  }
+      updated
+    } else {
+      log.warn("Entity {} is not registered as relation", entity.id)
+      update
+    }
 
   private def applyEntityUpdate(entity: Entity)
                                (curData: entity.ops.D,

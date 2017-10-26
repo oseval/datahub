@@ -58,17 +58,19 @@ class LocalStorageSpec extends FlatSpecLike
 
   it should "register relation and combine it's data" in {
     storage.addRelation(product1)
-    storage.combine(product1.id, product1Data)
+    storage.combineRelation(product1.id, product1Data)
     storage.get(product1) shouldBe Some(product1Data)
   }
 
   it should "sync relation when it is not solid" in {
     storage.addRelation(warehouse2)
-    storage.combine(warehouse2.id, warehouse2Data1).futureValue
-    storage.combine(warehouse2.id, warehouse2Data3).futureValue
+    storage.combineRelation(warehouse2.id, warehouse2Data1)
+    storage.combineRelation(warehouse2.id, warehouse2Data3)
 
     storage.checkDataIntegrity shouldBe false
-    verify(listener).notify(SyncRelationClocks(Map(warehouse2.id -> warehouse2Data1.clock)))
+    verify(listener).notify(SyncRelationClocks(
+      Map(warehouse2.id -> (warehouse2.id, warehouse2Data1.clock))
+    ))
   }
 
   it should "register entity with right relation clocks" in {

@@ -74,7 +74,7 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
     notifier.expectMsgType[Register[_]]
 
     warehouseHolder ! GetDifferenceFrom(warehouse.id, WarehouseOps.zero.clock)
-    expectMsgType[ALOData[String]] shouldEqual WarehouseOps.zero
+    expectMsgType[ALOData[String]] shouldEqual WarehouseOps.zero.copy(previousClock = WarehouseOps.zero.clock)
 
     warehouseHolder ! AddProduct(product.productId)
     notifier.expectMsgType[DataUpdated]

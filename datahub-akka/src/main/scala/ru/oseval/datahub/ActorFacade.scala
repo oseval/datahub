@@ -30,7 +30,7 @@ trait ActorDataMethods { this: Actor =>
       sender() ! storage.diffFromUnknownClock(entity, olderClock)
 
     case RelatedDataUpdated(id, relatedId, relatedUpdate) if id == entity.id =>
-      storage.combine(relatedId, relatedUpdate)
+      storage.combineRelation(relatedId, relatedUpdate)
       sender() ! ()
   }
 }

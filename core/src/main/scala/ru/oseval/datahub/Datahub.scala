@@ -34,7 +34,8 @@ object Datahub {
   }
   // TODO: add added and removed relations with their clocks?
   private[datahub] case class DataUpdated(entityId: String, data: Data) extends DatahubMessage
-  private[datahub] case class SyncRelationClocks(relationClocks: Map[String, Any]) extends DatahubMessage
+  private[datahub] case class SyncRelationClocks(relationClocks: Map[String, (String, Any)])
+    extends DatahubMessage
 }
 
 import Datahub._
