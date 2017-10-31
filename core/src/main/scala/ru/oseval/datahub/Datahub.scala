@@ -34,7 +34,7 @@ object Datahub {
   }
   // TODO: add added and removed relations with their clocks?
   private[datahub] case class DataUpdated(entityId: String, data: Data) extends DatahubMessage
-  private[datahub] case class SyncRelationClocks(relationClocks: Map[String, (String, Any)])
+  private[datahub] case class SyncRelationClocks(entityId: String, relationClocks: Map[String, Any])
     extends DatahubMessage
 }
 
@@ -50,28 +50,19 @@ abstract class Datahub(storage: Storage, implicit val ex: ExecutionContext) {
 
   def receive(msg: DatahubMessage): Future[Unit] = msg match {
     case Register(facade, lastClock, relationClocks) =>
-      // if facade is not registered then the facades subscribed to them
-      // need to be notified about last data if id bigger then their own
       facades += (facade.entity.id → facade)
-
-      reverseSubscriptions.update(
-        facade.entity.id,
-        reverseSubscriptions.getOrElse(facade.entity.id, Set.empty) ++ relationClocks.keySet
-      )
 
       relationClocks.foreach { case (id, clock) => subscribe(facade, id, Some(clock)) }
 
       storage.getLastClock(facade.entity.id).flatMap { lastStoredClockOpt =>
         val fops: facade.entity.ops.type = facade.entity.ops
-//        val lastStoredClock =
-//          lastStoredClockOpt.flatMap(fops.matchClock) getOrElse fops.zero.clock
-        lastStoredClockOpt.flatMap(fops.matchClock).foreach(lastStoredClock =>
+
+        lastStoredClockOpt.flatMap(fops.matchClock).map(lastStoredClock =>
           if (fops.ordering.gt(lastClock, lastStoredClock))
-          // TODO: requiredUpatesFrom? new method to notify all subscribers about update
-            facade.getUpdatesFrom(lastStoredClock)
-        )
-        storage.register(facade.entity.id, lastClock)
-      }
+            facade.getUpdatesFrom(lastStoredClock).flatMap(d => receive(DataUpdated(facade.entity.id, d)))
+          else Future.unit
+        ).getOrElse(Future.unit)
+      }.flatMap(_ => storage.register(facade.entity.id, lastClock))
 
     case DataUpdated(entityId, _data) =>
       facades.get(entityId).fold(
@@ -99,17 +90,19 @@ abstract class Datahub(storage: Storage, implicit val ex: ExecutionContext) {
           storage.change(entityId, data.clock)
         }
       }
+
+    case SyncRelationClocks(entityId, relationClocks) =>
+      facades.get(entityId).foreach { f =>
+        relationClocks.foreach { case (rid, clock) => syncRelation(f, rid, Some(clock)) }
+      }
+
+      Future.unit
   }
 
   protected def sendChangeToOne(to: EntityFacade, related: Entity)(relatedData: related.ops.D): Future[Unit] =
     to.onUpdate(related.id, relatedData)
 
-  private def subscribe(facade: EntityFacade, relatedId: String, lastKnownDataClockOpt: Option[Any]): Unit = {
-    log.debug("subscribe {}, {}, {}", facade.entity.id, relatedId, facades.get(relatedId))
-    val relatedSubscriptions = subscriptions.getOrElse(relatedId, Set.empty)
-    subscriptions.update(relatedId, relatedSubscriptions + facade.entity.id)
-    reverseSubscriptions.update(facade.entity.id, reverseSubscriptions.getOrElse(facade.entity.id, Set.empty) + relatedId)
-
+  private def syncRelation(facade: EntityFacade, relatedId: String, lastKnownDataClockOpt: Option[Any]): Unit = {
     facades.get(relatedId).foreach { related =>
       log.debug("Subscribe entity {} on {} with last known related clock {}", facade.entity.id, relatedId, lastKnownDataClockOpt)
 
@@ -131,6 +124,19 @@ abstract class Datahub(storage: Storage, implicit val ex: ExecutionContext) {
           )
       })
     }
+  }
+
+  private def subscribe(facade: EntityFacade, relatedId: String, lastKnownDataClockOpt: Option[Any]): Unit = {
+    log.debug("subscribe {}, {}, {}", facade.entity.id, relatedId, facades.get(relatedId))
+    val relatedSubscriptions = subscriptions.getOrElse(relatedId, Set.empty)
+    subscriptions.update(relatedId, relatedSubscriptions + facade.entity.id)
+
+    reverseSubscriptions.update(
+      facade.entity.id,
+      reverseSubscriptions.getOrElse(facade.entity.id, Set.empty) + relatedId
+    )
+
+    syncRelation(facade, relatedId, lastKnownDataClockOpt)
   }
 
   private def unsubscribe(facade: EntityFacade, relatedId: String): Unit = {

@@ -62,17 +62,6 @@ class LocalStorageSpec extends FlatSpecLike
     storage.get(product1) shouldBe Some(product1Data)
   }
 
-  it should "sync relation when it is not solid" in {
-    storage.addRelation(warehouse2)
-    storage.combineRelation(warehouse2.id, warehouse2Data1)
-    storage.combineRelation(warehouse2.id, warehouse2Data3)
-
-    storage.checkDataIntegrity shouldBe false
-    verify(listener).notify(SyncRelationClocks(
-      Map(warehouse2.id -> (warehouse2.id, warehouse2Data1.clock))
-    ))
-  }
-
   it should "register entity with right relation clocks" in {
     storage.addEntity(warehouse1)(warehouseData1).futureValue
 
@@ -80,6 +69,18 @@ class LocalStorageSpec extends FlatSpecLike
       null.asInstanceOf[EntityFacade { val entity: warehouse1.type }],
       Map(product1.id -> product1Data.clock)
     )(warehouseData1.clock))
+  }
+
+  it should "sync relation when it is not solid" in {
+    storage.addRelation(warehouse2)
+    storage.combineRelation(warehouse2.id, warehouse2Data1)
+    storage.combineRelation(warehouse2.id, warehouse2Data3)
+
+    storage.checkDataIntegrity shouldBe false
+    verify(listener).notify(SyncRelationClocks(
+      warehouse1.id,
+      Map(warehouse2.id -> warehouse2Data1.clock)
+    ))
   }
 
   it should "notify when local entity updated" in {

@@ -14,7 +14,7 @@ class LocalDataStorage(log: Logger,
                        knownData: Map[Entity, Data] = Map.empty) {
   private val entities = mutable.Map[String, Entity](knownData.keys.map(e => e.id -> e).toSeq: _*)
   private val relations = mutable.Set.empty[String]
-  private var notSolidRelations = Map.empty[String, (String, Any)]
+  private var notSolidRelations = Map.empty[String, Any]
   private val datas = mutable.Map(knownData.map { case (e, v) => e.id -> v }.toSeq: _*)
 
   private def createFacadeDep(e: Entity) = createFacade(e).asInstanceOf[EntityFacade { val entity: e.type }]
@@ -58,12 +58,9 @@ class LocalDataStorage(log: Logger,
 
       updated match {
         case data: AtLeastOnceData if !data.isSolid =>
-          entities.keys.headOption.foreach { eid =>
-            notSolidRelations = notSolidRelations.updated(
-              entity.id,
-              (eid, current.clock)
-            )
-          }
+          notSolidRelations = notSolidRelations.updated(
+            entity.id, current.clock
+          )
 
         case _ =>
       }
@@ -144,7 +141,9 @@ class LocalDataStorage(log: Logger,
     * @return
     */
   def checkDataIntegrity: Boolean = {
-    if (notSolidRelations.nonEmpty) notify(SyncRelationClocks(notSolidRelations))
+    if (notSolidRelations.nonEmpty) (entities -- relations).keys.headOption.foreach { eid =>
+      notify(SyncRelationClocks(eid, notSolidRelations))
+    }
 
     notSolidRelations.isEmpty
   }
