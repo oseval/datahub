@@ -24,11 +24,6 @@ trait AtLeastOnceData extends Data {
 }
 
 /**
-  * Any data which must apply updates continually (without gaps).
-  */
-trait ContinuedData extends AtLeastOnceData
-
-/**
   * If your data is compound from some other datas then you can use this trait to automate data flow
   */
 trait CompoundData extends AtLeastOnceData {

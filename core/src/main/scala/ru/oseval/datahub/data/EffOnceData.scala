@@ -30,6 +30,7 @@ abstract class EffOnceDataOps[A](val getRelations: A => Set[String] = (_: A) => 
 //    | -------- |
 
     if (first.clock >= second.previousClock) {
+      // TODO: ensure it is works
       val visible =
         if (first.previousClock >= second.previousClock) second
         else EffOnceData(
