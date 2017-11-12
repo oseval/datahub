@@ -28,7 +28,7 @@ class SetDataSpec extends FlatSpecLike with Matchers {
     val data = seedData.grouped(20).zipWithIndex.map { case (elms, i) =>
       elms.foldLeft((i*20, zeroData)) { case ((ctime, d), elm) =>
         val nextTime = ctime + 1
-        if (elm % 3 == 1) (nextTime, d.drop(elm - 1)(ClockInt(nextTime, ctime)))
+        if (elm % 3 == 1) (nextTime, d.remove(elm - 1)(ClockInt(nextTime, ctime)))
         else (nextTime, d.add(elm)(ClockInt(nextTime, ctime)))
       }._2
     }.toList

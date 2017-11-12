@@ -71,7 +71,7 @@ case class SetData[+A, Clk](clock: Clk, previousClock: Clk)
     SetData(newCint.cur, clock)(underlying + (newCint.cur -> el), removed, further)
   }
 
-  def drop[B >: A](el: B)(implicit newCint: ClockInt[Clk]): SetData[B, Clk] = {
+  def remove[B >: A](el: B)(implicit newCint: ClockInt[Clk]): SetData[B, Clk] = {
     SetData(newCint.cur, clock)(underlying, removed.updated(newCint.cur, el), further)
   }
 }

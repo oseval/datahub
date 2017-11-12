@@ -74,6 +74,9 @@ private class GroupActor(id: String, title: String, notifier: ActorRef)
     storage.addEntity(group)(GroupData(title, SetDataOps.zero[Long, Long]))
   }
 
+  // TODO: force register user facades after start -
+  // TODO: UserOps.makeActorFacade(userId) == ActorFacade(UserEntity(..), userActorRef)
+
   override def receive: Receive = handleDataMessage(group) orElse {
     case GetMembers => sender() ! storage.get(group).map(_.members.toSet).getOrElse(Set.empty)
     case AddMember(userId) =>

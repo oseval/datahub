@@ -50,6 +50,7 @@ abstract class Datahub(_storage: Storage, implicit val ec: ExecutionContext) {
   private val reverseSubscriptions = mutable.Map.empty[String, Set[String]] // facade -> related
 
   def receive(msg: DatahubMessage): Future[Unit] = msg match {
+    // TODO: Ask relations if has restricted subscription rights (from inside Facade)
     case Register(facade, lastClock, relationClocks) =>
       facades += (facade.entity.id → facade)
 
@@ -110,8 +111,6 @@ abstract class Datahub(_storage: Storage, implicit val ec: ExecutionContext) {
 
       val relops: related.entity.ops.type = related.entity.ops
 
-      // TODO: since related was register we need to send updates to subscriber from last clock
-      // TODO: even it is not exists in storage - fallback to Datahub state
       storage.getLastClock(relatedId).foreach(_.flatMap(relops.matchClock).foreach { lastClock =>
 
         val lastKnownDataClock = lastKnownDataClockOpt.flatMap(relops.matchClock) getOrElse relops.zero.clock
@@ -141,6 +140,7 @@ abstract class Datahub(_storage: Storage, implicit val ec: ExecutionContext) {
     syncRelation(facade, relatedId, lastKnownDataClockOpt)
   }
 
+  // TODO: add test
   private def unsubscribe(facade: EntityFacade, relatedId: String): Unit = {
     log.debug("Unsubscribe entity {} from related {}", Seq(facade.entity.id, relatedId): _*)
     val newRelatedSubscriptions = subscriptions.getOrElse(facade.entity.id, Set.empty) - facade.entity.id
