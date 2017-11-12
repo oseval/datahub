@@ -40,7 +40,8 @@ object Datahub {
 
 import Datahub._
 
-abstract class Datahub(storage: Storage, implicit val ex: ExecutionContext) {
+abstract class Datahub(_storage: Storage, implicit val ec: ExecutionContext) {
+  private val storage = new MemoryFallbackStorage(_storage)(ec)
   private val log = LoggerFactory.getLogger(getClass)
   private implicit val timeout: FiniteDuration = 3.seconds
 
@@ -54,6 +55,7 @@ abstract class Datahub(storage: Storage, implicit val ex: ExecutionContext) {
 
       relationClocks.foreach { case (id, clock) => subscribe(facade, id, Some(clock)) }
 
+      // sync registered entity clock
       storage.getLastClock(facade.entity.id).flatMap { lastStoredClockOpt =>
         val fops: facade.entity.ops.type = facade.entity.ops
 
@@ -163,4 +165,18 @@ class MemoryStorage extends Datahub.Storage {
   def getLastClock(entityId: String): Future[Option[Any]] = {
     Future.successful(ids.get(entityId))
   }
+}
+
+class MemoryFallbackStorage(storage: Storage)(implicit ec: ExecutionContext) extends MemoryStorage {
+  override def register(entityId: String, dataClock: Any): Future[Unit] =
+    super.register(entityId, dataClock).flatMap(_ => storage.register(entityId, dataClock))
+
+  override def change(entityId: String, dataClock: Any): Future[Unit] =
+    super.change(entityId, dataClock).flatMap(_ => storage.change(entityId, dataClock))
+
+  override def getLastClock(entityId: String): Future[Option[Any]] =
+    storage.getLastClock(entityId).flatMap {
+      case None => super.getLastClock(entityId)
+      case opt => Future.successful(opt)
+    }
 }

@@ -26,8 +26,7 @@ abstract class ALODataOps[A](relations: A => Set[String] = (_: A) => Set.empty) 
 //    | -------- |
 
     if (first.clock >= second.previousClock) {
-      if (first.previousClock >= second.previousClock)
-        first.further.map(combine(second, _)).getOrElse(second)
+      if (first.previousClock >= second.previousClock) second
       else {
         val visible = ALOData(
           data = second.data ++ first.data,
