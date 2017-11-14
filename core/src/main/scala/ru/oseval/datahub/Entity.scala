@@ -6,6 +6,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 
 trait Entity {
+  val kind: String = getClass.getName
   val id: String
   val ops: DataOps
 }
@@ -27,4 +28,6 @@ trait EntityFacade {
     * @return
     */
   def onUpdate(relatedId: String, relatedData: Data)(implicit timeout: FiniteDuration): Future[Unit]
+
+  val untrustedKinds: Set[String] = Set.empty[String]
 }
