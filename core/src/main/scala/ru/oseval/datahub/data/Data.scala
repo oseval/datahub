@@ -6,10 +6,6 @@ package ru.oseval.datahub.data
 trait Data { self =>
   type C
   val clock: C
-  /**
-    * Entity ids which related to the specified data
-    */
-  val relations: Set[String] = Set.empty
 }
 
 /**
