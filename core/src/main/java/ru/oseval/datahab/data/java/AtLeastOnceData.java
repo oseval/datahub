@@ -1,6 +1,6 @@
 package ru.oseval.datahab.data.java;
 
-public abstract class AtLeastOnceData extends Data {
+public abstract class AtLeastOnceData<C> extends Data<C> {
     C previousClock;
     boolean isSolid;
 }

@@ -6,11 +6,11 @@ import java.util.Comparator;
 import java.util.Optional;
 import java.util.Set;
 
-public abstract class DataOps {
-    public abstract class D extends Data {}
+public abstract class DataOps<C> {
+    public abstract class D extends Data<C> {}
 
     @NotNull
-    public Comparator<D.C> ordering;
+    public Comparator<C> ordering;
     /**
      * Data which is initial state for all such entities
      */
@@ -33,10 +33,10 @@ public abstract class DataOps {
      * @return
      */
     @NotNull
-    public abstract D diffFromClock(D a, D.C from);
+    public abstract D diffFromClock(D a, C from);
 
     @NotNull
-    public abstract D.C nextClock(D.C current);
+    public abstract C nextClock(C current);
 
     @NotNull
     public Optional<D> matchData(Data data) {
@@ -48,9 +48,9 @@ public abstract class DataOps {
     }
 
     @NotNull
-    public Optional<D.C> matchClock(Object clock) {
+    public Optional<C> matchClock(Object clock) {
         if (clock.getClass() == zero.clock.getClass()) {
-            return Optional.of((D.C) clock);
+            return Optional.of((C) clock);
         } else {
             return Optional.empty();
         }
