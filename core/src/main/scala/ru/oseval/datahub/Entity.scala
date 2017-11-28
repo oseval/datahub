@@ -29,5 +29,5 @@ trait EntityFacade {
     */
   def onUpdate(relatedId: String, relatedData: Data)(implicit timeout: FiniteDuration): Future[Unit]
 
-  val untrustedKinds: Set[String] = Set.empty[String]
+  val untrustedKinds: Set[String]
 }

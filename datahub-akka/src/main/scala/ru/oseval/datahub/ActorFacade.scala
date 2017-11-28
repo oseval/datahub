@@ -16,7 +16,7 @@ import ActorFacadeMessages._
 
 case class ActorFacade(entity: Entity,
                        holder: ActorRef,
-                       override val untrustedKinds: Set[String] = Set.empty[String]
+                       untrustedKinds: Set[String] = Set.empty[String]
                       ) extends EntityFacade {
   override def getUpdatesFrom(dataClock: entity.ops.D#C)(implicit timeout: FiniteDuration): Future[entity.ops.D] =
     holder.ask(GetDifferenceFrom(entity.id, dataClock))(timeout).asInstanceOf[Future[entity.ops.D]]

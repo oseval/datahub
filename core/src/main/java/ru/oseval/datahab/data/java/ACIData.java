@@ -1,4 +1,4 @@
-package ru.oseval.datahab.data.java
+package ru.oseval.datahab.data.java;
 
 import java.util.Comparator;
 import java.util.HashSet;

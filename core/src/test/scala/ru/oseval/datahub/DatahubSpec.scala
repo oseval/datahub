@@ -129,6 +129,35 @@ class DatahubSpec extends FlatSpecLike
   }
 
   it should "request entity and send clocks after sync request" in {
+    val datahub = new Datahub(storage, ec) {}
 
+    val product = ProductEntity(5)
+    val productFacade = mock[EntityFacade]
+    when(productFacade.entity).thenReturn(product)
+
+    // cache of product data
+    val warehouse = WarehouseEntity("5")
+    val warehouseFacade = mock[EntityFacade { val entity: warehouse.type }]
+    val warehouseData = ALOData(product.id)(ClockInt(System.currentTimeMillis, 0L))
+    when(warehouseFacade.entity).thenReturn(warehouse)
+
+    // Register product
+    datahub.receive(Register(productFacade, Map.empty)(productFacade.entity.ops.zero.clock)).futureValue
+
+    // Register warehouse
+    datahub.receive(Register(
+      warehouseFacade,
+      Map(product.id -> productFacade.entity.ops.zero.clock)
+    )(warehouseData.clock)).futureValue
+
+    // Product entity data is updated
+    val newProductData = ProductData("TV", 1, System.currentTimeMillis)
+    datahub.receive(DataUpdated(product.id, newProductData)).futureValue
+
+    verify(warehouseFacade).onUpdate(product.id, newProductData)
+
+    datahub.receive(SyncRelationClocks(warehouse.id, Map(product.id -> product.ops.zero.clock)))
+
+    verify(warehouseFacade).onUpdate(product.id, newProductData)
   }
 }
