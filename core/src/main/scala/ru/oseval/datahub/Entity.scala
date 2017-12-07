@@ -9,6 +9,11 @@ trait Entity {
   val kind: String = getClass.getName
   val id: String
   val ops: DataOps
+
+  /**
+    * Kinds of subscribers that can'tbe subscribed without explicitly checking by producer
+    */
+  val untrustedKinds: Set[String] = Set.empty
 }
 
 trait EntityFacade {
@@ -28,6 +33,4 @@ trait EntityFacade {
     * @return
     */
   def onUpdate(relatedId: String, relatedData: Data)(implicit timeout: FiniteDuration): Future[Unit]
-
-  val untrustedKinds: Set[String]
 }

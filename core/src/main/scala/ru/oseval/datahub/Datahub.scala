@@ -54,6 +54,7 @@ abstract class Datahub(_storage: Storage, implicit val ec: ExecutionContext) {
     case Register(facade, lastClock, relationClocks) =>
       facades += (facade.entity.id → facade)
 
+      // this facade depends on that relations
       relationClocks.foreach { case (id, clock) => subscribe(facade, id, Some(clock)) }
 
       // sync registered entity clock
@@ -130,14 +131,22 @@ abstract class Datahub(_storage: Storage, implicit val ec: ExecutionContext) {
   private def subscribe(facade: EntityFacade, relatedId: String, lastKnownDataClockOpt: Option[Any]): Unit = {
     log.debug("subscribe {}, {}, {}", facade.entity.id, relatedId, facades.get(relatedId))
     val relatedSubscriptions = subscriptions.getOrElse(relatedId, Set.empty)
-    subscriptions.update(relatedId, relatedSubscriptions + facade.entity.id)
 
-    reverseSubscriptions.update(
-      facade.entity.id,
-      reverseSubscriptions.getOrElse(facade.entity.id, Set.empty) + relatedId
+    facades.get(relatedId).foreach(relation =>
+      if (relation.entity.untrustedKinds contains facade.entity.kind) {
+        // TODO: request facade to get approve on subscription
+        log.warn("Failed to subscribe on {} due untrusted kind {}{}", relatedId, facade.entity.kind, "")
+      } else {
+        subscriptions.update(relatedId, relatedSubscriptions + facade.entity.id)
+
+        reverseSubscriptions.update(
+          facade.entity.id,
+          reverseSubscriptions.getOrElse(facade.entity.id, Set.empty) + relatedId
+        )
+
+        syncRelation(facade, relatedId, lastKnownDataClockOpt)
+      }
     )
-
-    syncRelation(facade, relatedId, lastKnownDataClockOpt)
   }
 
   // TODO: add test
