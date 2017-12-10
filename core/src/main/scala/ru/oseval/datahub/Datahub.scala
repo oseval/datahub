@@ -40,6 +40,7 @@ object Datahub {
 
 import Datahub._
 
+// TODO: due to Future's the Datahub must have an ability to store data in async environment
 abstract class Datahub(_storage: Storage, implicit val ec: ExecutionContext) {
   private val storage = new MemoryFallbackStorage(_storage)(ec)
   private val log = LoggerFactory.getLogger(getClass)
@@ -50,7 +51,6 @@ abstract class Datahub(_storage: Storage, implicit val ec: ExecutionContext) {
   private val reverseSubscriptions = mutable.Map.empty[String, Set[String]] // facade -> related
 
   def receive(msg: DatahubMessage): Future[Unit] = msg match {
-    // TODO: Ask relations if has restricted subscription rights (from inside Facade)
     case Register(facade, lastClock, relationClocks) =>
       facades += (facade.entity.id → facade)
 
@@ -133,19 +133,20 @@ abstract class Datahub(_storage: Storage, implicit val ec: ExecutionContext) {
     val relatedSubscriptions = subscriptions.getOrElse(relatedId, Set.empty)
 
     facades.get(relatedId).foreach(relation =>
-      if (relation.entity.untrustedKinds contains facade.entity.kind) {
-        // TODO: request facade to get approve on subscription
-        log.warn("Failed to subscribe on {} due untrusted kind {}{}", relatedId, facade.entity.kind, "")
-      } else {
-        subscriptions.update(relatedId, relatedSubscriptions + facade.entity.id)
+      relation.requestForApprove(facade.entity).map(
+        if (_) {
+          subscriptions.update(relatedId, relatedSubscriptions + facade.entity.id)
 
-        reverseSubscriptions.update(
-          facade.entity.id,
-          reverseSubscriptions.getOrElse(facade.entity.id, Set.empty) + relatedId
-        )
+          reverseSubscriptions.update(
+            facade.entity.id,
+            reverseSubscriptions.getOrElse(facade.entity.id, Set.empty) + relatedId
+          )
 
-        syncRelation(facade, relatedId, lastKnownDataClockOpt)
-      }
+          syncRelation(facade, relatedId, lastKnownDataClockOpt)
+        } else {
+          log.warn("Failed to subscribe on {} due untrusted kind {}{}", relatedId, facade.entity.kind, "")
+        }
+      )
     )
   }
 

@@ -11,7 +11,7 @@ trait Entity {
   val ops: DataOps
 
   /**
-    * Kinds of subscribers that can'tbe subscribed without explicitly checking by producer
+    * Kinds of subscribers that can't be subscribed without explicitly checking by producer
     */
   val untrustedKinds: Set[String] = Set.empty
 }
@@ -33,4 +33,11 @@ trait EntityFacade {
     * @return
     */
   def onUpdate(relatedId: String, relatedData: Data)(implicit timeout: FiniteDuration): Future[Unit]
+
+  /**
+    * When an entity is not trust to the relation kind then a subscription must approved
+    * @param relation
+    * @return
+    */
+  def requestForApprove(relation: Entity)(implicit timeout: FiniteDuration): Future[Boolean]
 }

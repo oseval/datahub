@@ -1,5 +1,7 @@
 package ru.oseval.datahub.data
 
+import ru.oseval.datahub.Entity
+
 /**
   * Idempotent (due to [[Data.clock]] and commutative (due to [[DataOps.ordering]]) data model.
   */
@@ -64,6 +66,8 @@ abstract class DataOps {
     if (clock.getClass == zero.clock.getClass) Some(clock.asInstanceOf[D#C]) else None
 
   def getRelations(data: D): Set[String]
+
+  def approveRelation(data: D, relation: Entity): Boolean = true
 }
 
 case class ClockInt[C](cur: C, prev: C)

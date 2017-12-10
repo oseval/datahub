@@ -62,6 +62,7 @@ class DatahubSpec extends FlatSpecLike
 
     // Register warehouse which depends on product, get updates from it
     when(productFacade.getUpdatesFrom(productData.clock)).thenReturn(Future.successful(newProductData))
+    when(productFacade.requestForApprove(warehouse)).thenReturn(Future.successful(true))
     when(warehouseFacade.onUpdate(product.id, newProductData)).thenReturn(Future.unit)
 
     datahub.receive(
@@ -69,6 +70,7 @@ class DatahubSpec extends FlatSpecLike
     ).futureValue
 
     verify(productFacade).getUpdatesFrom(productData.clock)
+    verify(productFacade).requestForApprove(warehouse)
     verify(warehouseFacade).onUpdate(product.id, newProductData)
   }
 
@@ -90,7 +92,11 @@ class DatahubSpec extends FlatSpecLike
     datahub.receive(Register(productFacade, Map.empty)(productData.clock)).futureValue
 
     // Register warehouse which depends on product, get updates from it
+    when(productFacade.requestForApprove(warehouse)).thenReturn(Future.successful(true))
+
     datahub.receive(Register(warehouseFacade, Map(product.id → productData.clock))(warehouseData.clock)).futureValue
+
+    verify(productFacade).requestForApprove(warehouse)
 
     // Product entity data is updated
     val newProductData = ProductData("TV", 1, System.currentTimeMillis)
@@ -118,8 +124,12 @@ class DatahubSpec extends FlatSpecLike
     datahub.receive(Register(warehouseFacade, Map.empty)(warehouseFacade.entity.ops.zero.clock)).futureValue
 
     // Send update with new related entity
+    when(productFacade.requestForApprove(warehouse)).thenReturn(Future.successful(true))
+
     val newWarehouseData = ALOData(product.id)(ClockInt(System.currentTimeMillis, 0L))
     datahub.receive(DataUpdated(warehouse.id, newWarehouseData)).futureValue
+
+    verify(productFacade).requestForApprove(warehouse)
 
     // Product entity data is updated
     val newProductData = ProductData("TV", 1, System.currentTimeMillis)
@@ -145,10 +155,14 @@ class DatahubSpec extends FlatSpecLike
     datahub.receive(Register(productFacade, Map.empty)(productFacade.entity.ops.zero.clock)).futureValue
 
     // Register warehouse
+    when(productFacade.requestForApprove(warehouse)).thenReturn(Future.successful(true))
+
     datahub.receive(Register(
       warehouseFacade,
       Map(product.id -> productFacade.entity.ops.zero.clock)
     )(warehouseData.clock)).futureValue
+
+    verify(productFacade).requestForApprove(warehouse)
 
     // Product entity data is updated
     val newProductData = ProductData("TV", 1, System.currentTimeMillis)

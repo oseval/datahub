@@ -120,6 +120,11 @@ class LocalDataStorage(log: Logger,
       }
     }, clock)
 
+  def approveRelation(entity: Entity, relation: Entity): Boolean =
+    get(entity).exists { data =>
+      entity.ops.approveRelation(data, relation)
+    }
+
   def get[D <: Data](entityId: String)(implicit tag: ClassTag[D]): Option[D] =
     datas.get(entityId).flatMap(d =>
       if (tag.runtimeClass.isAssignableFrom(d.getClass)) Some(tag.runtimeClass.cast(d).asInstanceOf[D]) else None

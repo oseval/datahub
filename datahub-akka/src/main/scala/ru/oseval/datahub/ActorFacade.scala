@@ -11,6 +11,7 @@ object ActorFacadeMessages {
   private[datahub] sealed trait FacadeMessage
   private[datahub] case class GetDifferenceFrom(entity: String, dataClock: Any) extends FacadeMessage
   private[datahub] case class RelatedDataUpdated(toEntityId: String, relatedId: String, data: Data) extends FacadeMessage
+  private[datahub] case class RequestForApprove(relation: Entity) extends FacadeMessage
 }
 import ActorFacadeMessages._
 
@@ -23,6 +24,11 @@ case class ActorFacade(entity: Entity,
 
   override def onUpdate(relatedId: String, relatedData: Data)(implicit timeout: FiniteDuration): Future[Unit] =
     holder.ask(RelatedDataUpdated(entity.id, relatedId, relatedData))(timeout).mapTo[Unit]
+
+  override def requestForApprove(relation: Entity)(implicit timeout: FiniteDuration): Future[Boolean] =
+    if (entity.untrustedKinds contains relation.kind)
+      holder.ask(RequestForApprove(relation)).mapTo[Boolean]
+    else Future.successful(true)
 }
 
 trait ActorDataMethods { this: Actor =>
@@ -35,5 +41,8 @@ trait ActorDataMethods { this: Actor =>
     case RelatedDataUpdated(id, relatedId, relatedUpdate) if id == entity.id =>
       storage.combineRelation(relatedId, relatedUpdate)
       sender() ! ()
+
+    case RequestForApprove(id, relation) if id == entity.id =>
+      sender() ! storage.approveRelation(id, relation)
   }
 }
