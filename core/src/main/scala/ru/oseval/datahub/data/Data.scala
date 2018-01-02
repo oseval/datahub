@@ -31,6 +31,7 @@ trait CompoundData extends AtLeastOnceData {
 
 abstract class DataOps {
   type D <: Data
+  val kind: String = getClass.getName
 
   val ordering: Ordering[D#C]
   /**

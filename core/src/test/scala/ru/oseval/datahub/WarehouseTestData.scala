@@ -10,5 +10,6 @@ object WarehouseTestData {
   case class WarehouseEntity(warehouseId: WarehouseId) extends Entity {
     lazy val id: String = "warehouse_" + warehouseId
     val ops = WarehouseOps
+    override val untrustedKinds: Set[String] = Set(ProductTestData.ProductOps.kind)
   }
 }

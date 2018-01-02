@@ -36,11 +36,13 @@ object Datahub {
   private[datahub] case class DataUpdated(entityId: String, data: Data) extends DatahubMessage
   private[datahub] case class SyncRelationClocks(entityId: String, relationClocks: Map[String, Any])
     extends DatahubMessage
+  private[Datahub] case class SubscribeApproved(facade: EntityFacade,
+                                                relatedId: String,
+                                                lastKnownDataClockOpt: Option[Any]) extends DatahubMessage
 }
 
 import Datahub._
 
-// TODO: due to Future's the Datahub must have an ability to store data in async environment
 abstract class Datahub(_storage: Storage, implicit val ec: ExecutionContext) {
   private val storage = new MemoryFallbackStorage(_storage)(ec)
   private val log = LoggerFactory.getLogger(getClass)
@@ -107,6 +109,20 @@ abstract class Datahub(_storage: Storage, implicit val ec: ExecutionContext) {
       }
 
       Future.unit
+
+    case SubscribeApproved(facade, relatedId, lastKnownDataClockOpt) =>
+      val relatedSubscriptions = subscriptions.getOrElse(relatedId, Set.empty)
+
+      subscriptions.update(relatedId, relatedSubscriptions + facade.entity.id)
+
+      reverseSubscriptions.update(
+        facade.entity.id,
+        reverseSubscriptions.getOrElse(facade.entity.id, Set.empty) + relatedId
+      )
+
+      syncRelation(facade, relatedId, lastKnownDataClockOpt)
+
+      Future.unit
   }
 
   protected def sendChangeToOne(to: EntityFacade, related: Entity)(relatedData: related.ops.D): Future[Unit] =
@@ -136,22 +152,11 @@ abstract class Datahub(_storage: Storage, implicit val ec: ExecutionContext) {
 
   private def subscribe(facade: EntityFacade, relatedId: String, lastKnownDataClockOpt: Option[Any]): Unit = {
     log.debug("subscribe {}, {}, {}", facade.entity.id, relatedId, facades.get(relatedId))
-    val relatedSubscriptions = subscriptions.getOrElse(relatedId, Set.empty)
 
     facades.get(relatedId).foreach(relation =>
       relation.requestForApprove(facade.entity).map(
-        if (_) {
-          subscriptions.update(relatedId, relatedSubscriptions + facade.entity.id)
-
-          reverseSubscriptions.update(
-            facade.entity.id,
-            reverseSubscriptions.getOrElse(facade.entity.id, Set.empty) + relatedId
-          )
-
-          syncRelation(facade, relatedId, lastKnownDataClockOpt)
-        } else {
-          log.warn("Failed to subscribe on {} due untrusted kind {}{}", relatedId, facade.entity.kind, "")
-        }
+        if (_) enqueueMessage(SubscribeApproved(facade, relatedId, lastKnownDataClockOpt))
+        else log.warn("Failed to subscribe on {} due untrusted kind {}{}", relatedId, facade.entity.ops.kind, "")
       )
     )
   }

@@ -6,7 +6,6 @@ import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 
 trait Entity {
-  val kind: String = getClass.getName
   val id: String
   val ops: DataOps
 
