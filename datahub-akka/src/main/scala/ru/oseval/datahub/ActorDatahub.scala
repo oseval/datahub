@@ -37,8 +37,14 @@ class ActorDatahub(storage: Datahub.Storage) extends Actor with ActorLogging {
     .run
 
   private val datahub = new Datahub(storage, context.dispatcher) {
+
+    override protected def enqueueMessage(msg: DatahubMessage): Future[Unit] = {
+      self ! msg
+      Future.unit
+    }
+
     override protected def sendChangeToOne(to: EntityFacade, related: Entity)
-                                 (relatedData: related.ops.D): Future[Unit] =
+                                          (relatedData: related.ops.D): Future[Unit] =
       queueOffer(DataTask(to, related.id, relatedData))
   }
 

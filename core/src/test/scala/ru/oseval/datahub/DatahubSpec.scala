@@ -25,12 +25,17 @@ class DatahubSpec extends FlatSpecLike
   private implicit val timeout = 3.seconds
 
   def storage = new MemoryStorage
+  def createDatahub = new Datahub(storage, ec) {
+    override def enqueueMessage(msg: DatahubMessage): Future[Unit] = synchronized {
+      receive(msg)
+    }
+  }
 
   behavior of "Datahub"
 
   it should "register data entities" in {
     val facade = mock[EntityFacade]
-    val datahub = new Datahub(storage, ec) {}
+    val datahub = createDatahub
 
     when(facade.entity).thenReturn(ProductEntity(1))
 
@@ -38,7 +43,7 @@ class DatahubSpec extends FlatSpecLike
   }
 
   it should "subscribe on related data entities" in {
-    val datahub = new Datahub(storage, ec) {}
+    val datahub = createDatahub
 
     val product = ProductEntity(2)
     val productFacade = mock[EntityFacade { val entity: product.type }]
@@ -69,13 +74,15 @@ class DatahubSpec extends FlatSpecLike
       Register(warehouseFacade, Map(product.id -> ProductOps.zero.clock))(warehouseData.clock)
     ).futureValue
 
-    verify(productFacade).getUpdatesFrom(productData.clock)
-    verify(productFacade).requestForApprove(warehouse)
-    verify(warehouseFacade).onUpdate(product.id, newProductData)
+    eventually {
+      verify(productFacade).getUpdatesFrom(productData.clock)
+      verify(productFacade).requestForApprove(warehouse)
+      verify(warehouseFacade).onUpdate(product.id, newProductData)
+    }
   }
 
   it should "receive updates from related entities" in {
-    val datahub = new Datahub(storage, ec) {}
+    val datahub = createDatahub
 
     val product = ProductEntity(3)
     val productFacade = mock[EntityFacade { val entity: product.type }]
@@ -106,7 +113,7 @@ class DatahubSpec extends FlatSpecLike
   }
 
   it should "subscribe entity to new related entities" in {
-    val datahub = new Datahub(storage, ec) {}
+    val datahub = createDatahub
 
     val product = ProductEntity(1)
     val productFacade = mock[EntityFacade]
@@ -139,7 +146,7 @@ class DatahubSpec extends FlatSpecLike
   }
 
   it should "request entity and send clocks after sync request" in {
-    val datahub = new Datahub(storage, ec) {}
+    val datahub = createDatahub
 
     val product = ProductEntity(5)
     val productFacade = mock[EntityFacade]

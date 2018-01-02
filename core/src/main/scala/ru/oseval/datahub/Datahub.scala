@@ -50,6 +50,9 @@ abstract class Datahub(_storage: Storage, implicit val ec: ExecutionContext) {
   private val subscriptions = mutable.Map.empty[String, Set[String]] // facade -> subscriptions
   private val reverseSubscriptions = mutable.Map.empty[String, Set[String]] // facade -> related
 
+  // enqueued messages should be handled sequentially, one by one
+  protected def enqueueMessage(msg: DatahubMessage): Future[Unit]
+
   def receive(msg: DatahubMessage): Future[Unit] = msg match {
     case Register(facade, lastClock, relationClocks) =>
       facades += (facade.entity.id → facade)
@@ -63,10 +66,13 @@ abstract class Datahub(_storage: Storage, implicit val ec: ExecutionContext) {
 
         lastStoredClockOpt.flatMap(fops.matchClock).map(lastStoredClock =>
           if (fops.ordering.gt(lastClock, lastStoredClock))
-            facade.getUpdatesFrom(lastStoredClock).flatMap(d => receive(DataUpdated(facade.entity.id, d)))
+            facade.getUpdatesFrom(lastStoredClock).flatMap(d => enqueueMessage(DataUpdated(facade.entity.id, d)))
           else Future.unit
         ).getOrElse(Future.unit)
-      }.flatMap(_ => storage.register(facade.entity.id, lastClock))
+      }.flatMap(_ =>
+        // TODO: sender should waiting just for store data to storage
+        storage.register(facade.entity.id, lastClock)
+      )
 
     case DataUpdated(entityId, _data) =>
       facades.get(entityId).fold(
