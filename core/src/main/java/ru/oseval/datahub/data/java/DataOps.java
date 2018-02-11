@@ -1,4 +1,4 @@
-package ru.oseval.datahab.data.java;
+package ru.oseval.datahub.data.java;
 
 import com.sun.istack.internal.NotNull;
 
@@ -7,15 +7,29 @@ import java.util.Optional;
 import java.util.Set;
 
 public abstract class DataOps<C> {
-    public abstract class D extends Data<C> {}
+    public abstract class D extends Data<C> {};
+
+    protected String kind = getClass().getName();
 
     @NotNull
-    public Comparator<C> ordering;
+    private Comparator<C> ordering;
     /**
      * Data which is initial state for all such entities
      */
     @NotNull
-    public D zero;
+    private D zero;
+
+    public Comparator<C> getOrdering() {
+        return ordering;
+    }
+
+    public D getZero() {
+        return zero;
+    }
+
+    public String getKind() {
+        return kind;
+    }
 
     /**
      * Combines two data objects to one
@@ -49,7 +63,7 @@ public abstract class DataOps<C> {
 
     @NotNull
     public Optional<C> matchClock(Object clock) {
-        if (clock.getClass() == zero.clock.getClass()) {
+        if (clock.getClass() == zero.getClock().getClass()) {
             return Optional.of((C) clock);
         } else {
             return Optional.empty();

@@ -1,4 +1,4 @@
-package ru.oseval.datahab.data.java;
+package ru.oseval.datahub.data.java;
 
 import com.sun.istack.internal.Nullable;
 

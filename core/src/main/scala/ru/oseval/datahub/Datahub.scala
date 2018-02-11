@@ -3,6 +3,7 @@ package ru.oseval.datahub
 import org.slf4j.LoggerFactory
 import ru.oseval.datahub.data.{Data, DataOps}
 
+import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
@@ -164,7 +165,7 @@ abstract class Datahub(_storage: Storage, implicit val ec: ExecutionContext) {
   // TODO: add test
   private def unsubscribe(facade: EntityFacade, relatedId: String): Unit = {
     log.debug("Unsubscribe entity {} from related {}", Seq(facade.entity.id, relatedId): _*)
-    val newRelatedSubscriptions = subscriptions.getOrElse(facade.entity.id, Set.empty) - facade.entity.id
+    val newRelatedSubscriptions = subscriptions.getOrElse(relatedId, Set.empty) - facade.entity.id
     if (newRelatedSubscriptions.isEmpty) subscriptions -= relatedId
     else subscriptions.update(relatedId, newRelatedSubscriptions)
   }
