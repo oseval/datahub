@@ -19,9 +19,9 @@ public abstract class Datahub {
     private Storage storage;
     private Logger log;
 
-    private Map<String, EntityFacade> facades = new HashMap<>();
-    private Map<String, Set<String>> subscriptions = new HashMap<>(); // facade -> subscriptions
-    private Map<String, Set<String>> reverseSubscriptions = new HashMap<>(); // facade -> related
+    private Map<String, EntityFacade> facades = new ConcurrentHashMap<>();
+    private Map<String, Set<String>> subscribers = new ConcurrentHashMap<>(); // facade -> subscribers
+    private Map<String, Set<String>> relations = new ConcurrentHashMap<>(); // facade -> relations
 
     public Datahub(Storage _storage) {
         this.log = LoggerFactory.getLogger(this.getClass());
@@ -78,26 +78,28 @@ public abstract class Datahub {
                 DataOps.D data = dataOpt.get();
 
                 // who subscribed on that facade
-                Set<String> subscribers = subscriptions.getOrDefault(entityId, new HashSet<>());
-                for (String subs : subscribers) {
-                    if (facades.containsKey(subs)) {
-                        sendChangeToOne(facades.get(subs), facade.getEntity(), data);
+                Set<String> curSubscribers = subscribers.get(entityId);
+                if (curSubscribers != null) {
+                    for (String subs : curSubscribers) {
+                        if (facades.containsKey(subs)) {
+                            sendChangeToOne(facades.get(subs), facade.getEntity(), data);
+                        }
                     }
                 }
 
                 // the facades on which that facade depends
                 Set<String> relatedFacades = ops.getRelations(data);
-                Set<String> reverseSubs = reverseSubscriptions.getOrDefault(entityId, new HashSet<>());
+                Set<String> rels = relations.get(entityId);
 
                 for (String relationId : relatedFacades) {
-                    if (!reverseSubs.contains(relationId)) {
+                    if (rels == null || !rels.contains(relationId)) {
                         subscribe(facade, relationId, Optional.empty());
                     }
                 }
 
-                for (String reverseId : reverseSubs) {
-                    if (!relatedFacades.contains(reverseId)) {
-                        unsubscribe(facade, reverseId);
+                for (String relationId : rels) {
+                    if (!relatedFacades.contains(relationId)) {
+                        unsubscribe(facade, relationId);
                     }
                 }
 
@@ -116,13 +118,18 @@ public abstract class Datahub {
     }
 
     public void subscribeApproved(EntityFacade facade, String relationId, Optional<Object> lastKnownDataClockOpt) {
-        Set<String> relatedSubscriptions = subscriptions.getOrDefault(relationId, new HashSet<>());
-        relatedSubscriptions.add(facade.getEntity().getId());
-        subscriptions.put(relationId, relatedSubscriptions);
+        subscribers.putIfAbsent(relationId, Collections.newSetFromMap(new ConcurrentHashMap<>()));
+        Set<String> subs = subscribers.get(relationId);
+        subs.add(facade.getEntity().getId());
 
-        Set<String> rSubscriptions = reverseSubscriptions.getOrDefault(facade.getEntity().getId(), new HashSet<>());
-        rSubscriptions.add(relationId);
-        reverseSubscriptions.put(facade.getEntity().getId(), rSubscriptions);
+        relations.putIfAbsent(
+                facade.getEntity().getId(),
+                Collections.newSetFromMap(new ConcurrentHashMap<>())
+        );
+        Set<String> rels = relations.get(facade.getEntity().getId());
+        rels.add(relationId);
+
+        syncRelation(facade, relationId, lastKnownDataClockOpt);
     }
 
     protected void sendChangeToOne(EntityFacade to, Entity related, Data relatedData) {
@@ -133,61 +140,72 @@ public abstract class Datahub {
         if (facades.containsKey(relatedId)) {
             EntityFacade related = facades.get(relatedId);
             log.debug(
-                    "Subscribe entity {} on {} with last known related clock {}",
+                    "Syncing entity {} on {} with last known related clock {}",
                     facade.getEntity().getId(), relatedId, lastKnownDataClockOpt
             );
 
-        DataOps relops = related.getEntity().getOps();
+            DataOps relops = related.getEntity().getOps();
 
-        storage.getLastClock(relatedId, clockOpt -> {
-            relops.matchClock(clockOpt).ifPresent(lastClock -> {
-                Object lastKnownDataClock = lastKnownDataClockOpt
-                        .flatMap(c -> relops.matchClock(c))
-                        .orElse(relops.getZero().getClock());
+            storage.getLastClock(relatedId, clockOpt -> {
+                relops.matchClock(clockOpt).ifPresent(lastClock -> {
+                    Object lastKnownDataClock = lastKnownDataClockOpt
+                            .flatMap(c -> relops.matchClock(c))
+                            .orElse(relops.getZero().getClock());
 
-                log.debug("lastClock {}, lastKnownClock {}, {}",
-                        lastClock, lastKnownDataClock, relops.getOrdering().compare(lastClock, lastKnownDataClock) > 0
-                );
+                    log.debug("lastClock {}, lastKnownClock {}, {}",
+                            lastClock, lastKnownDataClock, relops.getOrdering().compare(lastClock, lastKnownDataClock) > 0
+                    );
 
-                if (relops.getOrdering().compare(lastClock, lastKnownDataClock) > 0) {
-                    related.getUpdatesFrom(lastKnownDataClock, d -> {
-                        sendChangeToOne(facade, related.getEntity(), d);
-                        return null;
-                    });
-                }
+                    if (relops.getOrdering().compare(lastClock, lastKnownDataClock) > 0) {
+                        related.getUpdatesFrom(lastKnownDataClock, d -> {
+                            sendChangeToOne(facade, related.getEntity(), d);
+                            return null;
+                        });
+                    }
+                });
+
+                return null;
             });
-
-            return null;
-        });
+        }
     }
-  }
 
-  private void subscribe(EntityFacade facade, String relationId, Optional<Object> lastKnownDataClockOpt) {
-    log.debug("subscribe {}, {}, {}", facade.getEntity().getId(), relationId, facades.get(relationId));
+    private void subscribe(EntityFacade facade, String relationId, Optional<Object> lastKnownDataClockOpt) {
+        log.debug("subscribe {}, {}, {}", facade.getEntity().getId(), relationId, facades.get(relationId));
 
-    if (facades.containsKey(relationId)) {
-        EntityFacade relation = facades.get(relationId);
-        relation.requestForApprove(facade.getEntity(), approved -> {
-            if (approved) {
-                subscribeApproved(facade, relationId, lastKnownDataClockOpt);
-            } else {
-                log.warn(
-                        "Failed to subscribe on {} due untrusted kind {}{}",
-                        relationId, facade.getEntity().getOps().getKind());
+        if (facades.containsKey(relationId)) {
+            EntityFacade relation = facades.get(relationId);
+            relation.requestForApprove(facade.getEntity(), approved -> {
+                if (approved) {
+                    subscribeApproved(facade, relationId, lastKnownDataClockOpt);
+                } else {
+                    log.warn("Failed to subscribe on {} due untrusted kind {}{}",
+                            relationId, facade.getEntity().getOps().getKind());
+                }
+
+                return null;
+            });
+        }
+    }
+
+    private void unsubscribe(EntityFacade facade, String relatedId) {
+        log.debug("Unsubscribe entity {} from related {}", facade.getEntity().getId(), relatedId);
+        Set<String> newRelatedSubscriptions = subscribers.get(relatedId);
+
+        if (newRelatedSubscriptions != null) {
+            newRelatedSubscriptions.remove(facade.getEntity().getId());
+
+            if (newRelatedSubscriptions.isEmpty()) {
+                subscribers.remove(relatedId);
             }
+        }
 
-            return null;
-        });
+        Set<String> newRelations = relations.get(facade.getEntity().getId());
+        if (newRelations != null) {
+            newRelations.remove(relatedId);
+
+          if (newRelations.isEmpty()) {
+              relations.remove(facade.getEntity().getId());
+          }
+        }
     }
-  }
-
-  private void unsubscribe(EntityFacade facade, String relatedId) {
-    log.debug("Unsubscribe entity {} from related {}", facade.getEntity().getId(), relatedId);
-    Set<String> newRelatedSubscriptions = subscriptions.getOrDefault(relatedId, new HashSet<>());
-    newRelatedSubscriptions.remove(facade.getEntity().getId());
-
-    if (newRelatedSubscriptions.isEmpty()) {
-        subscriptions.remove(relatedId);
-    }
-  }
 }
