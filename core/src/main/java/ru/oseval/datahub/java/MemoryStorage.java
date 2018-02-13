@@ -1,5 +1,6 @@
 package ru.oseval.datahub.java;
 
+import java.util.Comparator;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -15,8 +16,9 @@ public class MemoryStorage implements Datahub.Storage {
     }
 
     @Override
-    public void change(String entityId, Object dataClock, Function<Void, Void> callback) {
-        ids.put(entityId, dataClock);
+    public <C> void increase(String entityId, C dataClock, Comparator<C> cmp, Function<Void, Void> callback) {
+        C old = ids.computeIfPresent().get(entityId, dataClock);
+        if (ids.put(entityId, dataClock))
         callback.apply(null);
     }
 

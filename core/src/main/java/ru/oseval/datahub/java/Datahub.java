@@ -12,7 +12,7 @@ import ru.oseval.datahub.data.java.DataOps;
 public abstract class Datahub {
     public interface Storage {
         void register(String entityId, Object dataClock, Function<Void, Void> callback);
-        void change(String entityId, Object dataClock, Function<Void, Void> callback);
+        <C> void increase(String entityId, C dataClock, Function<Void, Void> callback);
         void getLastClock(String entityId, Function<Optional<Object>, Void> callback);
     }
 
@@ -103,7 +103,7 @@ public abstract class Datahub {
                     }
                 }
 
-                storage.change(entityId, data.getClock(), callback);
+                storage.increase(entityId, data.getClock(), callback);
             }
         }
     }
@@ -118,16 +118,13 @@ public abstract class Datahub {
     }
 
     public void subscribeApproved(EntityFacade facade, String relationId, Optional<Object> lastKnownDataClockOpt) {
-        subscribers.putIfAbsent(relationId, Collections.newSetFromMap(new ConcurrentHashMap<>()));
-        Set<String> subs = subscribers.get(relationId);
-        subs.add(facade.getEntity().getId());
+        subscribers.computeIfAbsent(relationId, x -> Collections.newSetFromMap(new ConcurrentHashMap<>()))
+                .add(facade.getEntity().getId());
 
-        relations.putIfAbsent(
+        relations.computeIfAbsent(
                 facade.getEntity().getId(),
-                Collections.newSetFromMap(new ConcurrentHashMap<>())
-        );
-        Set<String> rels = relations.get(facade.getEntity().getId());
-        rels.add(relationId);
+                x -> Collections.newSetFromMap(new ConcurrentHashMap<>())
+        ).add(relationId);
 
         syncRelation(facade, relationId, lastKnownDataClockOpt);
     }

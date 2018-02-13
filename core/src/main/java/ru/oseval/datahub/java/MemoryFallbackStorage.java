@@ -1,5 +1,6 @@
 package ru.oseval.datahub.java;
 
+import java.util.Comparator;
 import java.util.Optional;
 import java.util.function.Function;
 
@@ -17,9 +18,9 @@ public class MemoryFallbackStorage extends MemoryStorage {
     }
 
     @Override
-    public void change(String entityId, Object dataClock, Function<Void, Void> callback) {
-        super.change(entityId, dataClock, v -> {
-            storage.change(entityId, dataClock, callback);
+    public <C> void increase(String entityId, C dataClock, Comparator<C> cmp, Function<Void, Void> callback) {
+        super.increase(entityId, dataClock, v -> {
+            storage.increase(entityId, dataClock, callback);
             return null;
         });
     }
