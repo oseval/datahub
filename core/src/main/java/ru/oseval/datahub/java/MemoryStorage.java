@@ -17,9 +17,14 @@ public class MemoryStorage implements Datahub.Storage {
 
     @Override
     public <C> void increase(String entityId, C dataClock, Comparator<C> cmp, Function<Void, Void> callback) {
-        C old = ids.computeIfPresent().get(entityId, dataClock);
-        if (ids.put(entityId, dataClock))
-        callback.apply(null);
+        Object res = ids.computeIfPresent(entityId, (k, _clk) -> {
+            C clk = (C) _clk;
+            return cmp.compare(dataClock, clk) > 0 ? dataClock : clk;
+        });
+
+        if (res == null) {
+            ids.putIfAbsent(entityId, dataClock);
+        }
     }
 
     @Override

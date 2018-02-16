@@ -19,8 +19,8 @@ public class MemoryFallbackStorage extends MemoryStorage {
 
     @Override
     public <C> void increase(String entityId, C dataClock, Comparator<C> cmp, Function<Void, Void> callback) {
-        super.increase(entityId, dataClock, v -> {
-            storage.increase(entityId, dataClock, callback);
+        super.increase(entityId, dataClock, cmp, v -> {
+            storage.increase(entityId, dataClock, cmp, callback);
             return null;
         });
     }

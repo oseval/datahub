@@ -12,7 +12,7 @@ import ru.oseval.datahub.data.java.DataOps;
 public abstract class Datahub {
     public interface Storage {
         void register(String entityId, Object dataClock, Function<Void, Void> callback);
-        <C> void increase(String entityId, C dataClock, Function<Void, Void> callback);
+        <C> void increase(String entityId, C dataClock, Comparator<C> cmp, Function<Void, Void> callback);
         void getLastClock(String entityId, Function<Optional<Object>, Void> callback);
     }
 
@@ -22,6 +22,8 @@ public abstract class Datahub {
     private Map<String, EntityFacade> facades = new ConcurrentHashMap<>();
     private Map<String, Set<String>> subscribers = new ConcurrentHashMap<>(); // facade -> subscribers
     private Map<String, Set<String>> relations = new ConcurrentHashMap<>(); // facade -> relations
+    // subscribers to which changes will be sent anyway, but without clock sync
+    private Map<String, Set<EntityFacade>> forcedSubscribers = new ConcurrentHashMap<>();
 
     public Datahub(Storage _storage) {
         this.log = LoggerFactory.getLogger(this.getClass());
@@ -57,7 +59,11 @@ public abstract class Datahub {
             return null;
         });
 
-        storage.register(facade.getEntity().getId(), lastClock, callback);
+        storage.increase(facade.getEntity().getId(), lastClock, facade.getEntity().getOps().getOrdering(), callback);
+    }
+
+    public void setForcedSubscribers(String entityId, Set<EntityFacade> forced, Function<Void, Void> callback) {
+        forcedSubscribers.put(entityId, forced);
     }
 
     public void dataUpdated(String entityId, Data _data, Function<Void, Void> callback) {
@@ -87,23 +93,31 @@ public abstract class Datahub {
                     }
                 }
 
+                // send changes to forced subscribers
+                Set<EntityFacade> forced = forcedSubscribers.get(entityId);
+                if (forced != null) {
+                    for (EntityFacade f : forced) {
+                        sendChangeToOne(f, facade.getEntity(), data);
+                    }
+                }
+
                 // the facades on which that facade depends
-                Set<String> relatedFacades = ops.getRelations(data);
+                Set<String> newRelations = ops.getRelations(data);
                 Set<String> rels = relations.get(entityId);
 
-                for (String relationId : relatedFacades) {
+                for (String relationId : newRelations) {
                     if (rels == null || !rels.contains(relationId)) {
                         subscribe(facade, relationId, Optional.empty());
                     }
                 }
 
                 for (String relationId : rels) {
-                    if (!relatedFacades.contains(relationId)) {
+                    if (!newRelations.contains(relationId)) {
                         unsubscribe(facade, relationId);
                     }
                 }
 
-                storage.increase(entityId, data.getClock(), callback);
+                storage.increase(entityId, data.getClock(), facade.getEntity().getOps().getOrdering(), callback);
             }
         }
     }

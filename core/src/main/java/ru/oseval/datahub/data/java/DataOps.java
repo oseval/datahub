@@ -12,12 +12,12 @@ public abstract class DataOps<C> {
     protected String kind = getClass().getName();
 
     @NotNull
-    private Comparator<C> ordering;
+    protected Comparator<C> ordering;
     /**
      * Data which is initial state for all such entities
      */
     @NotNull
-    private D zero;
+    protected D zero;
 
     public Comparator<C> getOrdering() {
         return ordering;
