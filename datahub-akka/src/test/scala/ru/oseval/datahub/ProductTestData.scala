@@ -5,6 +5,7 @@ import akka.pattern.{ask, pipe}
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
 
+import scala.concurrent.Future
 import scala.concurrent.duration._
 
 object ActorProductTestData {
@@ -18,7 +19,7 @@ object ActorProductTestData {
   case class UpdateData(data: ProductData)
 
   private class ProductActor(productId: Int, protected val notifier: ActorRef)
-    extends Actor with ActorLogging with ActorDataMethods {
+    extends Actor with ActorLogging with ActorDataMethods[Future] {
     import context.dispatcher
     private implicit val timeout: Timeout = 3.seconds
     private val product = ProductEntity(productId)

@@ -1,4 +1,4 @@
-package ru.oseval.datahub.java;
+package ru.oseval.datahub.j;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -6,31 +6,33 @@ import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import ru.oseval.datahub.data.java.Data;
-import ru.oseval.datahub.data.java.DataOps;
+import ru.oseval.datahub.EntityFacadeInt;
+import ru.oseval.datahub.data.j.Data;
+import ru.oseval.datahub.data.j.DataOps;
 
-public abstract class Datahub {
+public class Datahub {
     public interface Storage {
-        void register(String entityId, Object dataClock, Function<Void, Void> callback);
         <C> void increase(String entityId, C dataClock, Comparator<C> cmp, Function<Void, Void> callback);
-        void getLastClock(String entityId, Function<Optional<Object>, Void> callback);
+        <C> void getLastClock(String entityId, Function<Optional<C>, Void> callback);
     }
+
+    public static Function<Void, Void> emptyCallback = x -> null;
 
     private Storage storage;
     private Logger log;
 
-    private Map<String, EntityFacade> facades = new ConcurrentHashMap<>();
+    private Map<String, EntityFacadeInt> facades = new ConcurrentHashMap<>();
     private Map<String, Set<String>> subscribers = new ConcurrentHashMap<>(); // facade -> subscribers
     private Map<String, Set<String>> relations = new ConcurrentHashMap<>(); // facade -> relations
     // subscribers to which changes will be sent anyway, but without clock sync
-    private Map<String, Set<EntityFacade>> forcedSubscribers = new ConcurrentHashMap<>();
+    private Map<String, Set<EntityFacadeInt>> forcedSubscribers = new ConcurrentHashMap<>();
 
     public Datahub(Storage _storage) {
         this.log = LoggerFactory.getLogger(this.getClass());
         this.storage = new MemoryFallbackStorage(_storage);
     }
 
-    public void register(EntityFacade facade,
+    public void register(EntityFacadeInt facade,
                          final Object lastClock,
                          Map<String, Object> relationClocks,
                          Function<Void, Void> callback) {
@@ -48,7 +50,7 @@ public abstract class Datahub {
             lastStoredClockOpt.flatMap(clock -> fops.matchClock(clock)).map(lastStoredClock -> {
                 if (fops.getOrdering().compare(lastClock, lastStoredClock) > 0) {
                     facade.getUpdatesFrom(lastStoredClock, d -> {
-                        dataUpdated(facade.getEntity().getId(), d, x -> null);
+                        dataUpdated(facade.getEntity().getId(), d, emptyCallback);
                         return null;
                     });
                 }
@@ -56,13 +58,17 @@ public abstract class Datahub {
                 return null;
             });
 
+            if (!lastStoredClockOpt.isPresent()) {
+                storage.increase(
+                        facade.getEntity().getId(), lastClock, facade.getEntity().getOps().getOrdering(), callback
+                );
+            }
+
             return null;
         });
-
-        storage.increase(facade.getEntity().getId(), lastClock, facade.getEntity().getOps().getOrdering(), callback);
     }
 
-    public void setForcedSubscribers(String entityId, Set<EntityFacade> forced, Function<Void, Void> callback) {
+    public void setForcedSubscribers(String entityId, Set<EntityFacadeInt> forced, Function<Void, Void> callback) {
         forcedSubscribers.put(entityId, forced);
     }
 
@@ -70,7 +76,7 @@ public abstract class Datahub {
         if (!facades.containsKey(entityId)) {
             log.error("Facade with id={} is not registered", entityId);
         } else {
-            EntityFacade facade = facades.get(entityId);
+            EntityFacadeInt facade = facades.get(entityId);
             DataOps ops = facade.getEntity().getOps();
             Optional<DataOps.D> dataOpt = ops.matchData(_data);
 
@@ -94,9 +100,9 @@ public abstract class Datahub {
                 }
 
                 // send changes to forced subscribers
-                Set<EntityFacade> forced = forcedSubscribers.get(entityId);
+                Set<EntityFacadeInt> forced = forcedSubscribers.get(entityId);
                 if (forced != null) {
-                    for (EntityFacade f : forced) {
+                    for (EntityFacadeInt f : forced) {
                         sendChangeToOne(f, facade.getEntity(), data);
                     }
                 }
@@ -124,14 +130,14 @@ public abstract class Datahub {
 
     public void syncRelationClocks(String entityId, Map<String, Object> relationClocks) {
         if (facades.containsKey(entityId)) {
-            EntityFacade facade = facades.get(entityId);
+            EntityFacadeInt facade = facades.get(entityId);
             for (Map.Entry<String, Object> rel : relationClocks.entrySet()) {
                 syncRelation(facade, rel.getKey(), Optional.of(rel.getValue()));
             }
         }
     }
 
-    public void subscribeApproved(EntityFacade facade, String relationId, Optional<Object> lastKnownDataClockOpt) {
+    public void subscribeApproved(EntityFacadeInt facade, String relationId, Optional<Object> lastKnownDataClockOpt) {
         subscribers.computeIfAbsent(relationId, x -> Collections.newSetFromMap(new ConcurrentHashMap<>()))
                 .add(facade.getEntity().getId());
 
@@ -143,13 +149,13 @@ public abstract class Datahub {
         syncRelation(facade, relationId, lastKnownDataClockOpt);
     }
 
-    protected void sendChangeToOne(EntityFacade to, Entity related, Data relatedData) {
+    protected void sendChangeToOne(EntityFacadeInt to, Entity related, Data relatedData) {
         to.onUpdate(related.getId(), relatedData);
     }
 
-    private void syncRelation(EntityFacade facade, String relatedId, Optional<Object> lastKnownDataClockOpt) {
+    private void syncRelation(EntityFacadeInt facade, String relatedId, Optional<Object> lastKnownDataClockOpt) {
         if (facades.containsKey(relatedId)) {
-            EntityFacade related = facades.get(relatedId);
+            EntityFacadeInt related = facades.get(relatedId);
             log.debug(
                     "Syncing entity {} on {} with last known related clock {}",
                     facade.getEntity().getId(), relatedId, lastKnownDataClockOpt
@@ -180,11 +186,11 @@ public abstract class Datahub {
         }
     }
 
-    private void subscribe(EntityFacade facade, String relationId, Optional<Object> lastKnownDataClockOpt) {
+    private void subscribe(EntityFacadeInt facade, String relationId, Optional<Object> lastKnownDataClockOpt) {
         log.debug("subscribe {}, {}, {}", facade.getEntity().getId(), relationId, facades.get(relationId));
 
         if (facades.containsKey(relationId)) {
-            EntityFacade relation = facades.get(relationId);
+            EntityFacadeInt relation = facades.get(relationId);
             relation.requestForApprove(facade.getEntity(), approved -> {
                 if (approved) {
                     subscribeApproved(facade, relationId, lastKnownDataClockOpt);
@@ -198,7 +204,7 @@ public abstract class Datahub {
         }
     }
 
-    private void unsubscribe(EntityFacade facade, String relatedId) {
+    private void unsubscribe(EntityFacadeInt facade, String relatedId) {
         log.debug("Unsubscribe entity {} from related {}", facade.getEntity().getId(), relatedId);
         Set<String> newRelatedSubscriptions = subscribers.get(relatedId);
 

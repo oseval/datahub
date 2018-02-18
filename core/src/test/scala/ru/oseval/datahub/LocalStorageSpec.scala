@@ -6,7 +6,6 @@ import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mockito.MockitoSugar
 import org.slf4j.LoggerFactory
 import org.mockito.Mockito._
-import ru.oseval.datahub.Datahub.{DataUpdated, Register, SyncRelationClocks}
 import ru.oseval.datahub.ProductTestData.{ProductData, ProductEntity}
 import ru.oseval.datahub.WarehouseTestData.{WarehouseEntity, WarehouseOps}
 import ru.oseval.datahub.data.{ALOData, ClockInt, Data}
@@ -37,19 +36,19 @@ class LocalStorageSpec extends FlatSpecLike
 
   val log = LoggerFactory.getLogger(getClass)
 
-  class MessageListener {
-    def notify(msg: Datahub.DatahubMessage): Future[Unit] = Future.unit
+  type Id[T] = T
+  class SpiedDatahub extends Datahub[Id] {
+    override def register(facade: EntityFacade)
+                         (lastClock: facade.entity.ops.D#C, relationClocks: Map[String, Any]): Id[Unit] = ()
+    override def setForcedSubscribers(entityId: String, forced: Set[EntityFacade]): Id[Unit] = ()
+    override def dataUpdated(entityId: String, _data: Data): Id[Unit] = ()
+    override def syncRelationClocks(entityId: String, relationClocks: Map[String, Any]): Id[Unit] = ()
   }
 
-  def makeStorage(knownData: Map[Entity, Data] = Map.empty): (LocalDataStorage, MessageListener) = {
-    val listener = new MessageListener
-    val spiedListener = Mockito.spy[MessageListener](listener)
-    new LocalDataStorage(
-      LoggerFactory.getLogger(getClass),
-      _ => null,
-      msg => spiedListener.notify(msg),
-      knownData
-    ) -> spiedListener
+  def makeStorage(knownData: Map[Entity, Data] = Map.empty): (LocalDataStorage[Id], Datahub[Id]) = {
+    val datahub = new SpiedDatahub
+    val spiedhub = Mockito.spy[SpiedDatahub](datahub)
+    new LocalDataStorage(LoggerFactory.getLogger(getClass), _ => null, spiedhub, knownData) -> spiedhub
   }
 
   val (storage, listener) = makeStorage()
@@ -63,12 +62,11 @@ class LocalStorageSpec extends FlatSpecLike
   }
 
   it should "register entity with right relation clocks" in {
-    storage.addEntity(warehouse1)(warehouseData1).futureValue
+    storage.addEntity(warehouse1)(warehouseData1)
 
-    verify(listener).notify(Register(
-      null.asInstanceOf[EntityFacade { val entity: warehouse1.type }],
-      Map(product1.id -> product1Data.clock)
-    )(warehouseData1.clock))
+    verify(listener).register(
+      null.asInstanceOf[EntityFacade { val entity: warehouse1.type }]
+    )(warehouseData1.clock, Map(product1.id -> product1Data.clock))
   }
 
   it should "sync relation when it is not solid" in {
@@ -77,16 +75,16 @@ class LocalStorageSpec extends FlatSpecLike
     storage.combineRelation(warehouse2.id, warehouse2Data3)
 
     storage.checkDataIntegrity shouldBe false
-    verify(listener).notify(SyncRelationClocks(
+    verify(listener).syncRelationClocks(
       warehouse1.id,
       Map(warehouse2.id -> warehouse2Data1.clock)
-    ))
+    )
   }
 
   it should "notify when local entity updated" in {
-    storage.combineEntity(warehouse1)(_ => warehouseData2).futureValue
+    storage.combineEntity(warehouse1)(_ => warehouseData2)
 
-    verify(listener).notify(DataUpdated(warehouse1.id, warehouseData2))
+    verify(listener).dataUpdated(warehouse1.id, warehouseData2)
 
     storage.get(warehouse1) shouldBe Some(warehouseDataTotal)
     storage.get[ProductData](product1.id) shouldBe Some(product1Data)

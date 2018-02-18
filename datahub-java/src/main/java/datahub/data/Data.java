@@ -1,4 +1,4 @@
-package ru.oseval.datahub.data.java;
+package ru.oseval.datahub.data.j;
 
 public abstract class Data<C> {
     private C clock;

@@ -1,11 +1,11 @@
-package ru.oseval.datahub.java;
+package ru.oseval.datahub;
 
-import ru.oseval.datahub.data.java.DataOps;
+import ru.oseval.datahub.data.j.DataOps;
 
 import java.util.HashSet;
 import java.util.Set;
 
-abstract class Entity {
+public abstract class AbstractEntity {
     private String id;
     private DataOps ops;
     /**
@@ -13,7 +13,7 @@ abstract class Entity {
      */
     private Set<String> untrustedKinds;
 
-    Entity(String id, DataOps ops, Set<String> untrustedKinds) {
+    AbstractEntity(String id, DataOps ops, Set<String> untrustedKinds) {
       this.id = id;
       this.ops = ops;
       this.untrustedKinds = untrustedKinds == null ? new HashSet<>() : untrustedKinds;

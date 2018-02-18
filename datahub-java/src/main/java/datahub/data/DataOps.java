@@ -1,4 +1,4 @@
-package ru.oseval.datahub.data.java;
+package ru.oseval.datahub.data.j;
 
 import com.sun.istack.internal.NotNull;
 
@@ -7,8 +7,6 @@ import java.util.Optional;
 import java.util.Set;
 
 public abstract class DataOps<C> {
-    public abstract class D extends Data<C> {};
-
     protected String kind = getClass().getName();
 
     @NotNull
@@ -17,13 +15,13 @@ public abstract class DataOps<C> {
      * Data which is initial state for all such entities
      */
     @NotNull
-    protected D zero;
+    protected Data<C> zero;
 
     public Comparator<C> getOrdering() {
         return ordering;
     }
 
-    public D getZero() {
+    public Data<C> getZero() {
         return zero;
     }
 
@@ -38,7 +36,7 @@ public abstract class DataOps<C> {
      * @return
      */
     @NotNull
-    public abstract D combine(D a, D b);
+    public abstract Data<C> combine(Data<C> a, Data<C> b);
 
     /**
      * Computes diff between `a` and older state with a `from` id
@@ -47,13 +45,13 @@ public abstract class DataOps<C> {
      * @return
      */
     @NotNull
-    public abstract D diffFromClock(D a, C from);
+    public abstract Data<C> diffFromClock(Data<C> a, C from);
 
     @NotNull
     public abstract C nextClock(C current);
 
     @NotNull
-    public Optional<D> matchData(Data data) {
+    public Optional<Data<C>> matchData(Data data) {
         if (zero.getClass().isAssignableFrom(data.getClass())) {
             return Optional.of(zero.getClass().cast(data));
         } else {
@@ -71,5 +69,5 @@ public abstract class DataOps<C> {
     }
 
     @NotNull
-    public abstract Set<String> getRelations(D data);
+    public abstract Set<String> getRelations(Data<C> data);
 }

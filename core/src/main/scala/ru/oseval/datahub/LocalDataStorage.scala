@@ -1,17 +1,15 @@
 package ru.oseval.datahub
 
 import org.slf4j.Logger
-import ru.oseval.datahub.Datahub.{DataUpdated, DatahubMessage, Register, SyncRelationClocks}
 import ru.oseval.datahub.data.{AtLeastOnceData, ClockInt, Data}
 
 import scala.collection.mutable
-import scala.concurrent.Future
 import scala.reflect.ClassTag
 
-class LocalDataStorage(log: Logger,
-                       createFacade: Entity => EntityFacade,
-                       notify: DatahubMessage => Future[Unit],
-                       knownData: Map[Entity, Data] = Map.empty) {
+class LocalDataStorage[M[_]](log: Logger,
+                             createFacade: Entity => EntityFacade,
+                             datahub: Datahub[M],
+                             knownData: Map[Entity, Data] = Map.empty) {
   private val entities = mutable.Map[String, Entity](knownData.keys.map(e => e.id -> e).toSeq: _*)
   private val relations = mutable.Set.empty[String]
   private var notSolidRelations = Map.empty[String, Any]
@@ -19,7 +17,7 @@ class LocalDataStorage(log: Logger,
 
   private def createFacadeDep(e: Entity) = createFacade(e).asInstanceOf[EntityFacade { val entity: e.type }]
 
-  def addEntity(entity: Entity)(_data: entity.ops.D): Future[Unit] = {
+  def addEntity(entity: Entity)(_data: entity.ops.D): M[Unit] = {
     entities.update(entity.id, entity)
     val data: entity.ops.D = get(entity).getOrElse {
       datas.update(entity.id, _data)
@@ -29,7 +27,7 @@ class LocalDataStorage(log: Logger,
     val relationClocks = entity.ops.getRelations(data)
       .flatMap(id => datas.get(id).map(d => id -> d.clock)).toMap
     // send current clock to avoid unnecessary update sending (from zero to current)
-    notify(Register(createFacadeDep(entity), relationClocks)(data.clock))
+    datahub.register(createFacadeDep(entity))(data.clock, relationClocks)
   }
 
   def addRelation(entity: Entity): Unit = {
@@ -88,11 +86,11 @@ class LocalDataStorage(log: Logger,
 
       datas.update(entity.id, updatedData)
 
-      notify(DataUpdated(entity.id, dataUpdate))
+      datahub.dataUpdated(entity.id, dataUpdate)
     } else addEntity(entity)(updatedData)
 
   def combineEntity(entity: Entity)
-                   (upd: entity.ops.D#C => entity.ops.D): Future[Unit] = {
+                   (upd: entity.ops.D#C => entity.ops.D): M[Unit] = {
     val curData = get(entity).getOrElse(entity.ops.zero)
     val dataUpdate = upd(entity.ops.nextClock(curData.clock))
     val updatedData = entity.ops.combine(curData, dataUpdate)
@@ -101,7 +99,7 @@ class LocalDataStorage(log: Logger,
   }
 
   def updateEntity(entity: Entity)
-                  (upd: ClockInt[entity.ops.D#C] => entity.ops.D => entity.ops.D): Future[Unit] = {
+                  (upd: ClockInt[entity.ops.D#C] => entity.ops.D => entity.ops.D): M[Unit] = {
     val curData = get(entity).getOrElse(entity.ops.zero)
     val updatedData = upd(ClockInt(entity.ops.nextClock(curData.clock), curData.clock))(curData)
     val dataUpdate = entity.ops.diffFromClock(updatedData, curData.clock)
@@ -147,7 +145,7 @@ class LocalDataStorage(log: Logger,
     */
   def checkDataIntegrity: Boolean = {
     if (notSolidRelations.nonEmpty) (entities -- relations).keys.headOption.foreach { eid =>
-      notify(SyncRelationClocks(eid, notSolidRelations))
+      datahub.syncRelationClocks(eid, notSolidRelations)
     }
 
     notSolidRelations.isEmpty

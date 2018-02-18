@@ -5,7 +5,6 @@ import akka.pattern.ask
 import org.scalatest
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike}
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
-import ru.oseval.datahub.Datahub._
 
 import scala.concurrent.duration._
 import ProductTestData._
@@ -13,9 +12,10 @@ import WarehouseTestData._
 import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import ActorFacadeMessages._
+import ru.oseval.datahub.ActorDatahub._
 import ru.oseval.datahub.data.{ALOData, ClockInt}
 
-class DatahubSpec extends TestKit(ActorSystem("notifierTest"))
+class AsyncDatahubSpec extends TestKit(ActorSystem("notifierTest"))
   with ImplicitSender
   with FlatSpecLike
   with BeforeAndAfterAll

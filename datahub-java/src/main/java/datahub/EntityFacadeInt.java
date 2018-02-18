@@ -1,11 +1,11 @@
-package ru.oseval.datahub.java;
+package ru.oseval.datahub;
 
-import ru.oseval.datahub.data.java.Data;
+import ru.oseval.datahub.data.j.Data;
 
 import java.util.function.Function;
 
-interface EntityFacade {
-    Entity getEntity();
+public interface EntityFacadeInt {
+    AbstractEntity getEntity();
 
     /**
      * Request explicit data difference from entity

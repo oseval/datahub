@@ -31,8 +31,8 @@ case class ActorFacade(entity: Entity,
     else Future.successful(true)
 }
 
-trait ActorDataMethods { this: Actor =>
-  protected val storage: LocalDataStorage
+trait ActorDataMethods[M[_]] { this: Actor =>
+  protected val storage: LocalDataStorage[M]
 
   def handleDataMessage(entity: Entity): Receive = {
     case GetDifferenceFrom(id, olderClock) if id == entity.id =>

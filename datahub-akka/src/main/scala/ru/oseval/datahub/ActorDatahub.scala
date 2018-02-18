@@ -1,21 +1,59 @@
 package ru.oseval.datahub
 
-import akka.actor.{Actor, ActorLogging, Props}
-import akka.pattern.pipe
+import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import akka.pattern.{ask, pipe}
 import akka.stream._
 import akka.stream.scaladsl.{Sink, Source}
-import ru.oseval.datahub.Datahub.DatahubMessage
 import ru.oseval.datahub.data.Data
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
 object ActorDatahub {
-  def props(storage: Datahub.Storage): Props = Props(classOf[ActorDatahub], storage)
+  private[datahub] sealed trait DatahubMessage
+  private[datahub] abstract class Register[F <: EntityFacade](val dataFacade: F, val relationClocks: Map[String, Any]) extends DatahubMessage {
+    val lastClock: dataFacade.entity.ops.D#C
+    override def equals(obj: Any): Boolean = obj match {
+      case o: Register[_] => dataFacade == o.dataFacade && relationClocks == o.relationClocks && lastClock == o.lastClock
+      case _ => super.equals(obj)
+    }
+  }
+  object Register {
+    def apply(dataFacade: EntityFacade, relationClocks: Map[String, Any])
+             (_lastClock: dataFacade.entity.ops.D#C): Register[dataFacade.type] = {
+      new Register[dataFacade.type](dataFacade, relationClocks) {
+        override val lastClock: dataFacade.entity.ops.D#C = _lastClock
+      }
+    }
+    def unapply[F <: EntityFacade](register: Register[F]): Option[(register.dataFacade.type, register.dataFacade.entity.ops.D#C, Map[String, Any])] =
+      Some((register.dataFacade, register.lastClock, register.relationClocks))
+  }
+  // TODO: add added and removed relations with their clocks?
+  private[datahub] case class DataUpdated(entityId: String, data: Data) extends DatahubMessage
+  private[datahub] case class SyncRelationClocks(entityId: String, relationClocks: Map[String, Any])
+    extends DatahubMessage
+//  private[Datahub] case class SubscribeApproved(facade: EntityFacade,
+//                                                relatedId: String,
+//                                                lastKnownDataClockOpt: Option[Any]) extends DatahubMessage
+
+  def props(storage: Datahub.Storage): Props = Props(classOf[ActorDatahubImpl], storage)
+}
+import ActorDatahub._
+
+case class ActorDatahub(ref: ActorRef)(implicit timeout: FiniteDuration) extends Datahub[Future] {
+  override def register(facade: EntityFacade)
+                       (lastClock: facade.entity.ops.D#C, relationClocks: Map[String, Any]): Future[Unit] =
+    (ref ? Register(facade, relationClocks)(lastClock)).map(_ => ())
+
+  // TODO: actor just for akka.Replicator. Wrap regular datahub to send replication data
+  override def setForcedSubscribers(entityId: String, forced: Set[EntityFacade]): Future[Unit] = ???
+
+  override def dataUpdated(entityId: String, _data: Data): Future[Unit] = ???
+
+  override def syncRelationClocks(entityId: String, relationClocks: Map[String, Any]): Future[Unit] = ???
 }
 
-
-class ActorDatahub(storage: Datahub.Storage) extends Actor with ActorLogging {
+private class ActorDatahubImpl(storage: Datahub.Storage) extends Actor with ActorLogging {
   import context.dispatcher
   private implicit val timeout: FiniteDuration = 3.seconds
 
@@ -36,20 +74,17 @@ class ActorDatahub(storage: Datahub.Storage) extends Actor with ActorLogging {
     .to(Sink.ignore)
     .run
 
-  private val datahub = new Datahub(storage, context.dispatcher) {
-
-    override protected def enqueueMessage(msg: DatahubMessage): Future[Unit] = {
-      self ! msg
-      Future.unit
-    }
-
-    override protected def sendChangeToOne(to: EntityFacade, related: Entity)
-                                          (relatedData: related.ops.D): Future[Unit] =
-      queueOffer(DataTask(to, related.id, relatedData))
+  private val datahub = new AsyncDatahub(storage)(context.dispatcher) {
+    override protected def sendChangeToOne(to: EntityFacade, relation: Entity)
+                                          (relationData: relation.ops.D): Future[Unit] =
+      queueOffer(DataTask(to, relation.id, relationData))
   }
 
   override def receive: Receive = {
-    case msg: DatahubMessage => datahub.receive(msg) pipeTo sender()
+    case Register(facade, lastClock, relationClocks) =>
+      datahub.register(facade)(lastClock, relationClocks) pipeTo sender()
+    case DataUpdated(entityId, data) => datahub.dataUpdated(entityId, data)
+    case SyncRelationClocks(entityId, relationClocks) => datahub.syncRelationClocks(entityId, relationClocks)
   }
 
   protected def queueOffer(task: DataTask): Future[Unit] = {

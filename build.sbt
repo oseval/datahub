@@ -22,7 +22,7 @@ val commonSettings = Seq(
   )
 )
 
-lazy val root = (project in file(".")).aggregate(core, datahubAkka, examples)
+lazy val root = (project in file(".")).aggregate(core, datahubAkka, examples, datahubJava)
 
 lazy val core = (project in file("core")).settings(commonSettings)
 
@@ -37,3 +37,5 @@ lazy val datahubAkka = (project in file("datahub-akka"))
 lazy val examples = (project in file("examples"))
   .dependsOn(core, datahubAkka)
   .settings(commonSettings)
+
+lazy val datahubJava = project in file("datahub-java")
