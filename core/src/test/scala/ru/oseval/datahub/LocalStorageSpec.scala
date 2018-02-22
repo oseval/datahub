@@ -10,8 +10,6 @@ import ru.oseval.datahub.ProductTestData.{ProductData, ProductEntity}
 import ru.oseval.datahub.WarehouseTestData.{WarehouseEntity, WarehouseOps}
 import ru.oseval.datahub.data.{ALOData, ClockInt, Data}
 
-import scala.concurrent.Future
-
 class LocalStorageSpec extends FlatSpecLike
   with MockitoSugar
   with ScalaFutures

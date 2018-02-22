@@ -1,59 +1,46 @@
 package ru.oseval.datahub
 
-import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
 import akka.pattern.{ask, pipe}
 import akka.stream._
 import akka.stream.scaladsl.{Sink, Source}
+import ru.oseval.datahub
+import ru.oseval.datahub.AsyncDatahub.Storage
 import ru.oseval.datahub.data.Data
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 
 object ActorDatahub {
-  private[datahub] sealed trait DatahubMessage
-  private[datahub] abstract class Register[F <: EntityFacade](val dataFacade: F, val relationClocks: Map[String, Any]) extends DatahubMessage {
-    val lastClock: dataFacade.entity.ops.D#C
-    override def equals(obj: Any): Boolean = obj match {
-      case o: Register[_] => dataFacade == o.dataFacade && relationClocks == o.relationClocks && lastClock == o.lastClock
-      case _ => super.equals(obj)
+  class InnerStorageDecorator(system: ActorSystem) extends AsyncDatahub.InnerDataStorage {
+    private def receive(cmd: CMD): Unit = cmd match {
+      case Facades =>
+      case Relations =>
+      case ForcedSubscribers =>
     }
+    private lazy val replicator = system.actorOf(Props(classOf[ReplicatorBridge], receive _))
+
+    override def facade(entityId: String): Option[EntityFacade] = ???
+
+    override def registerFacade(entityFacade: EntityFacade): Unit = ???
+
+    override def getSubscribers(entityId: String): Set[String] = ???
+
+    override def getRelations(entityId: String): Set[String] = ???
+
+    override def addRelation(entityId: String, subscriberId: String): Unit = ???
+
+    override def removeRelation(entityId: String, subscriberId: String): Unit = ???
+
+    override def setForcedSubscribers(entityId: String, subscribers: Set[EntityFacade]): Unit = ???
   }
-  object Register {
-    def apply(dataFacade: EntityFacade, relationClocks: Map[String, Any])
-             (_lastClock: dataFacade.entity.ops.D#C): Register[dataFacade.type] = {
-      new Register[dataFacade.type](dataFacade, relationClocks) {
-        override val lastClock: dataFacade.entity.ops.D#C = _lastClock
-      }
-    }
-    def unapply[F <: EntityFacade](register: Register[F]): Option[(register.dataFacade.type, register.dataFacade.entity.ops.D#C, Map[String, Any])] =
-      Some((register.dataFacade, register.lastClock, register.relationClocks))
-  }
-  // TODO: add added and removed relations with their clocks?
-  private[datahub] case class DataUpdated(entityId: String, data: Data) extends DatahubMessage
-  private[datahub] case class SyncRelationClocks(entityId: String, relationClocks: Map[String, Any])
-    extends DatahubMessage
-//  private[Datahub] case class SubscribeApproved(facade: EntityFacade,
-//                                                relatedId: String,
-//                                                lastKnownDataClockOpt: Option[Any]) extends DatahubMessage
-
-  def props(storage: Datahub.Storage): Props = Props(classOf[ActorDatahubImpl], storage)
-}
-import ActorDatahub._
-
-case class ActorDatahub(ref: ActorRef)(implicit timeout: FiniteDuration) extends Datahub[Future] {
-  override def register(facade: EntityFacade)
-                       (lastClock: facade.entity.ops.D#C, relationClocks: Map[String, Any]): Future[Unit] =
-    (ref ? Register(facade, relationClocks)(lastClock)).map(_ => ())
-
-  // TODO: actor just for akka.Replicator. Wrap regular datahub to send replication data
-  override def setForcedSubscribers(entityId: String, forced: Set[EntityFacade]): Future[Unit] = ???
-
-  override def dataUpdated(entityId: String, _data: Data): Future[Unit] = ???
-
-  override def syncRelationClocks(entityId: String, relationClocks: Map[String, Any]): Future[Unit] = ???
 }
 
-private class ActorDatahubImpl(storage: Datahub.Storage) extends Actor with ActorLogging {
+case class ActorDatahub[M[_]](storage: Storage)
+                             (implicit system: ActorSystem, ec: ExecutionContext)
+  extends AsyncDatahub(storage, new datahub.ActorDatahub.InnerStorageDecorator(system))(ec)
+
+private class ReplicatorBridge(storage: Datahub.Storage) extends Actor with ActorLogging {
   import context.dispatcher
   private implicit val timeout: FiniteDuration = 3.seconds
 

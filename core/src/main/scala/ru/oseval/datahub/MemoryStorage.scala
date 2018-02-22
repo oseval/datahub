@@ -2,7 +2,7 @@ package ru.oseval.datahub
 
 import java.util.concurrent.ConcurrentHashMap
 
-import ru.oseval.datahub.Datahub.Storage
+import ru.oseval.datahub.AsyncDatahub.Storage
 
 import scala.concurrent.Future
 

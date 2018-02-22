@@ -4,12 +4,12 @@ import org.scalatest
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike}
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.mockito.Mockito._
-import ru.oseval.datahub.Datahub._
 
 import scala.concurrent.duration._
 import ProductTestData._
 import WarehouseTestData._
 import org.scalatest.mockito.MockitoSugar
+import ru.oseval.datahub
 import ru.oseval.datahub.data.{ALOData, ClockInt}
 
 import scala.concurrent.Future
@@ -25,7 +25,7 @@ class AsyncDatahubSpec extends FlatSpecLike
   private implicit val timeout = 3.seconds
 
   def storage = new MemoryStorage
-  def createDatahub = new AsyncDatahub(storage)(ec)
+  def createDatahub = new AsyncDatahub(storage, new datahub.AsyncDatahub.MemoryInnerStorage)(ec)
 
   behavior of "Datahub"
 
