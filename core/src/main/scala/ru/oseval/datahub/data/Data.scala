@@ -66,9 +66,9 @@ abstract class DataOps {
   def matchClock(clock: Any): Option[D#C] =
     if (clock.getClass == zero.clock.getClass) Some(clock.asInstanceOf[D#C]) else None
 
-  def getRelations(data: D): Set[String]
+  def getRelations(data: D): (Set[String], Set[String])
 
-  def approveRelation(data: D, relation: Entity): Boolean = true
+  def approveRelation(data: D, relationId: String): Boolean = true
 }
 
 case class ClockInt[C](cur: C, prev: C)

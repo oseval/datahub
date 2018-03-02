@@ -5,7 +5,8 @@ object ACIDataOps {
     System.currentTimeMillis max (current + 1L)
 }
 
-abstract class ACIDataOps[A](relations: A => Set[String] = (_: A) => Set.empty[String]) extends DataOps {
+abstract class ACIDataOps[A](relations: A => (Set[String], Set[String]) =
+                             (_: A) => (Set.empty[String], Set.empty[String])) extends DataOps {
   override type D = ACIData[A]
   override val ordering: Ordering[Long] = Ordering.Long
   override val zero: D = ACIData()
@@ -16,7 +17,7 @@ abstract class ACIDataOps[A](relations: A => Set[String] = (_: A) => Set.empty[S
   override def diffFromClock(a: D, from: Long): D =
     if (a.clock > from) a else zero
 
-  override def getRelations(data: D): Set[String] = data.data.toSet.flatMap(relations)
+  override def getRelations(data: D): (Set[String], Set[String]) = data.data.toSet.flatMap(relations)
 
   override def nextClock(current: Long): Long = ACIDataOps.nextClock(current)
 }

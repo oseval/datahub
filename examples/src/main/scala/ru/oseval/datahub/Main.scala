@@ -12,7 +12,7 @@ object Main extends App {
 
   val system = ActorSystem("example")
   val storage = new MemoryStorage
-  val notifier = system.actorOf(ActorDatahub.props(storage))
+  val notifier = system.actorOf(AkkaDatahub.props(storage))
 
   val user1 = system.actorOf(User.props(1, "User 1", notifier))
   val user2 = system.actorOf(User.props(2, "User 2", notifier))

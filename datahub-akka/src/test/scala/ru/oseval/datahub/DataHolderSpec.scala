@@ -5,7 +5,7 @@ import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import org.scalatest
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike}
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
-import ru.oseval.datahub.ActorDatahub.{DataUpdated, Register}
+import ru.oseval.datahub.AkkaDatahub.{DataUpdated, Register}
 import ActorFacadeMessages._
 import ru.oseval.datahub.data.ALOData
 

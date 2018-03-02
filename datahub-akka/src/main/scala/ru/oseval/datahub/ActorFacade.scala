@@ -11,7 +11,7 @@ object ActorFacadeMessages {
   private[datahub] sealed trait FacadeMessage
   private[datahub] case class GetDifferenceFrom(entity: String, dataClock: Any) extends FacadeMessage
   private[datahub] case class RelatedDataUpdated(toEntityId: String, relatedId: String, data: Data) extends FacadeMessage
-  private[datahub] case class RequestForApprove(entityId: String, relation: Entity) extends FacadeMessage
+  private[datahub] case class RequestForApprove(entityId: String, relationId: String) extends FacadeMessage
 }
 import ActorFacadeMessages._
 
@@ -25,9 +25,9 @@ case class ActorFacade(entity: Entity,
   override def onUpdate(relatedId: String, relatedData: Data)(implicit timeout: FiniteDuration): Future[Unit] =
     holder.ask(RelatedDataUpdated(entity.id, relatedId, relatedData))(timeout).mapTo[Unit]
 
-  override def requestForApprove(relation: Entity)(implicit timeout: FiniteDuration): Future[Boolean] =
-    if (entity.untrustedKinds contains relation.ops.kind)
-      holder.ask(RequestForApprove(entity.id, relation))(timeout).mapTo[Boolean]
+  override def requestForApprove(relationId: String, kind: String)(implicit timeout: FiniteDuration): Future[Boolean] =
+    if (entity.untrustedKinds contains kind)
+      holder.ask(RequestForApprove(entity.id, relationId))(timeout).mapTo[Boolean]
     else Future.successful(true)
 }
 
@@ -42,7 +42,7 @@ trait ActorDataMethods[M[_]] { this: Actor =>
       storage.combineRelation(relatedId, relatedUpdate)
       sender() ! ()
 
-    case RequestForApprove(id, relation) if id == entity.id =>
-      sender() ! storage.approveRelation(entity, relation)
+    case RequestForApprove(id, relationId) if id == entity.id =>
+      sender() ! storage.approveRelation(entity, relationId)
   }
 }

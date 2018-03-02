@@ -118,9 +118,9 @@ class LocalDataStorage[M[_]](log: Logger,
       }
     }, clock)
 
-  def approveRelation(entity: Entity, relation: Entity): Boolean =
+  def approveRelation(entity: Entity, relationId: String): Boolean =
     get(entity).exists { data =>
-      entity.ops.approveRelation(data, relation)
+      entity.ops.approveRelation(data, relationId)
     }
 
   def get[D <: Data](entityId: String)(implicit tag: ClassTag[D]): Option[D] =

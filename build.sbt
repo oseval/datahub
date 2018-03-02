@@ -2,7 +2,7 @@ name := "datahub"
 
 version := "0.1-SNAPSHOT"
 
-scalaVersion := "2.12.2"
+scalaVersion := "2.12.4"
 
 resolvers ++= Seq(
   "Typesafe repository" at "http://repo.typesafe.com/typesafe/releases/",
@@ -30,8 +30,8 @@ lazy val datahubAkka = (project in file("datahub-akka"))
   .dependsOn(core)
   .settings(commonSettings)
   .settings(libraryDependencies ++= Seq(
-    "com.typesafe.akka" %% "akka-stream" % "2.5.2",
-    "com.typesafe.akka" %% "akka-stream-testkit" % "2.5.2" % "test"
+    "com.typesafe.akka" %% "akka-cluster-sharding" % "2.5.10",
+    "com.typesafe.akka" %% "akka-testkit" % "2.5.10" % "test"
   ))
 
 lazy val examples = (project in file("examples"))

@@ -12,7 +12,7 @@ import WarehouseTestData._
 import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import ActorFacadeMessages._
-import ru.oseval.datahub.ActorDatahub._
+import ru.oseval.datahub.AkkaDatahub._
 import ru.oseval.datahub.data.{ALOData, ClockInt}
 
 class AsyncDatahubSpec extends TestKit(ActorSystem("notifierTest"))
@@ -37,7 +37,7 @@ class AsyncDatahubSpec extends TestKit(ActorSystem("notifierTest"))
 
   it should "register data entities" in {
     val holderProbe = TestProbe("holder")
-    val notifier = system.actorOf(ActorDatahub.props(storage))
+    val notifier = system.actorOf(AkkaDatahub.props(storage))
 
     val facade = ActorFacade(ProductEntity(1), holderProbe.ref)
     notifier ! Register(facade, Map.empty)(facade.entity.ops.zero.clock)
@@ -45,7 +45,7 @@ class AsyncDatahubSpec extends TestKit(ActorSystem("notifierTest"))
   }
 
   it should "subscribe on related data entities" in {
-    val notifier = system.actorOf(ActorDatahub.props(storage))
+    val notifier = system.actorOf(AkkaDatahub.props(storage))
 
     val productHolderProbe = TestProbe("productHolder")
     val product = ProductEntity(2)
@@ -84,7 +84,7 @@ class AsyncDatahubSpec extends TestKit(ActorSystem("notifierTest"))
   }
 
   it should "receive updates from related entities" in {
-    val notifier = system.actorOf(ActorDatahub.props(storage))
+    val notifier = system.actorOf(AkkaDatahub.props(storage))
 
     val productHolderProbe = TestProbe("productHolder")
     val product = ProductEntity(3)
@@ -120,7 +120,7 @@ class AsyncDatahubSpec extends TestKit(ActorSystem("notifierTest"))
   }
 
   it should "subscribe entity to new related entities" in {
-    val notifier = system.actorOf(ActorDatahub.props(storage))
+    val notifier = system.actorOf(AkkaDatahub.props(storage))
 
     val productHolderProbe = TestProbe("productHolder")
     val product = ProductEntity(4)

@@ -7,6 +7,7 @@ import scala.concurrent.duration.FiniteDuration
 
 trait Entity {
   val id: String
+  // TODO: ops could be taken from a map kind -> ops if the Entity will contains a kind
   val ops: DataOps
 
   /**
@@ -35,8 +36,9 @@ trait EntityFacade {
 
   /**
     * When an entity is not trust to the relation kind then a subscription must approved
-    * @param relation
+    * @param relationId
+    * @param kind
     * @return
     */
-  def requestForApprove(relation: Entity)(implicit timeout: FiniteDuration): Future[Boolean]
+  def requestForApprove(relationId: String, kind: String)(implicit timeout: FiniteDuration): Future[Boolean]
 }

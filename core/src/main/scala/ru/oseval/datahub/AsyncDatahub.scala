@@ -13,18 +13,15 @@ object AsyncDatahub {
     def getLastClock(entity: Entity): Future[Option[entity.ops.D#C]]
   }
 
-  trait InnerDataStorage {
-    def facade(entityId: String): Option[EntityFacade]
-    def registerFacade(entityFacade: EntityFacade): Unit
-
-    def getSubscribers(entityId: String): Set[String]
-    def getRelations(entityId: String): Set[String]
-
-    def addRelation(entityId: String, subscriberId: String): Unit
-    def removeRelation(entityId: String, subscriberId: String): Unit
-
-    def setForcedSubscribers(entityId: String, subscribers: Set[EntityFacade]): Unit
-  }
+//  trait InnerDataStorage {
+//    def facade(entityId: String): Option[EntityFacade]
+//    def registerFacade(entityFacade: EntityFacade): Unit
+//
+//    def getSubscribers(entityId: String): Set[String]
+//
+//    def addSubscriber(entityId: String, subscriberId: String): Unit
+//    def removeSubscriber(entityId: String, subscriberId: String): Unit
+//  }
 
   class MemoryFallbackStorage(storage: Storage)(implicit ec: ExecutionContext) extends MemoryStorage {
     override def increase(entity: Entity)(dataClock: entity.ops.D#C): Future[Unit] =
@@ -37,53 +34,47 @@ object AsyncDatahub {
       }
   }
 
-  class MemoryInnerStorage extends InnerDataStorage {
-    private val trieSetEmpty: TrieMap[String, Boolean] = TrieMap.empty[String, Boolean]
+  private class MemoryInnerStorage /*extends InnerDataStorage */{
+    protected val trieSetEmpty: TrieMap[String, Boolean] = TrieMap.empty[String, Boolean]
 
     private val facades: TrieMap[String, EntityFacade] =
       TrieMap.empty[String, EntityFacade]
     private val subscribers: TrieMap[String, TrieMap[String, Boolean]] =
       TrieMap.empty[String, TrieMap[String, Boolean]] // facade -> subscribers
-    private val relations: TrieMap[String, TrieMap[String, Boolean]] =
-      TrieMap.empty[String, TrieMap[String, Boolean]] // facade -> relations
+//    protected val relations: TrieMap[String, TrieMap[String, Boolean]] =
+//      TrieMap.empty[String, TrieMap[String, Boolean]] // facade -> relations
 
-    // subscribers to which changes will be sent anyway, but without clock sync
-    private val forcedSubscribers: TrieMap[String, Set[EntityFacade]] =
-      new TrieMap[String, Set[EntityFacade]]
+    def facade(entityId: String): Option[EntityFacade] = facades.get(entityId)
+    def registerFacade(entityFacade: EntityFacade): Unit = facades.put(entityFacade.entity.id, entityFacade)
 
-    override def facade(entityId: String): Option[EntityFacade] = facades.get(entityId)
-    override def registerFacade(entityFacade: EntityFacade): Unit = facades.put(entityFacade.entity.id, entityFacade)
-
-    override def getSubscribers(entityId: String): Set[String] =
+    def getSubscribers(entityId: String): Set[String] =
       subscribers.get(entityId).map(_.keySet.toSet[String]) getOrElse Set.empty[String]
-    override def getRelations(entityId: String): Set[String] =
-      relations.get(entityId).map(_.keySet.toSet[String]) getOrElse Set.empty[String]
+//    override def getRelations(entityId: String): Set[String] =
+//      relations.get(entityId).map(_.keySet.toSet[String]) getOrElse Set.empty[String]
 
-    override def addRelation(entityId: String, relationId: String): Unit = {
-      subscribers.putIfAbsent(relationId, trieSetEmpty)
-      subscribers(relationId).update(entityId, true)
+    def addSubscriber(entityId: String, subscriberId: String): Unit = {
+      subscribers.putIfAbsent(entityId, trieSetEmpty)
+      subscribers(entityId).update(subscriberId, true)
 
-      relations.putIfAbsent(entityId, trieSetEmpty)
-      relations(entityId).update(relationId, true)
+//      relations.putIfAbsent(entityId, trieSetEmpty)
+//      relations(entityId).update(subscriberId, true)
     }
-    override def removeRelation(entityId: String, relationId: String): Unit = {
-      subscribers.get(relationId).foreach(_ -= entityId)
-      subscribers.remove(relationId, trieSetEmpty)
+    def removeSubscriber(entityId: String, subscriberId: String): Unit = {
+      subscribers.get(entityId).foreach(_ -= subscriberId)
+      subscribers.remove(entityId, trieSetEmpty)
 
-      relations.get(entityId).foreach(_ -= relationId)
-      relations.remove(entityId, trieSetEmpty)
+//      relations.get(entityId).foreach(_ -= relationId)
+//      relations.remove(entityId, trieSetEmpty)
     }
-
-    override def setForcedSubscribers(entityId: String, subscribers: Set[EntityFacade]): Unit =
-      forcedSubscribers.update(entityId, subscribers)
   }
 }
 import AsyncDatahub._
 
-class AsyncDatahub(_storage: Storage, protected val innerStorage: InnerDataStorage)
+class AsyncDatahub(_storage: Storage)
                   (implicit val ec: ExecutionContext) extends Datahub[Future] {
   private val storage = new MemoryFallbackStorage(_storage)(ec)
-  private val log = LoggerFactory.getLogger(getClass)
+  private val innerStorage = new MemoryInnerStorage
+  protected val log = LoggerFactory.getLogger(getClass)
   private implicit val timeout: FiniteDuration = 3.seconds
 
   def register(facade: EntityFacade)
@@ -92,6 +83,9 @@ class AsyncDatahub(_storage: Storage, protected val innerStorage: InnerDataStora
 
     // this facade depends on that relations
     relationClocks.foreach { case (id, clock) => subscribe(facade, id, Some(clock)) }
+
+    // TODO: request facade to approve all subscribers
+
 
     // sync registered entity clock
     storage.getLastClock(facade.entity).flatMap { lastStoredClockOpt =>
@@ -105,10 +99,11 @@ class AsyncDatahub(_storage: Storage, protected val innerStorage: InnerDataStora
     }
   }
 
-  def setForcedSubscribers(entityId: String, forced: Set[EntityFacade]): Future[Unit] =
-    Future.successful(innerStorage.setForcedSubscribers(entityId, forced))
-
-  def dataUpdated(entityId: String, _data: Data): Future[Unit] = {
+  def dataUpdated(entityId: String, // TODO: may be EntityFacade instead?
+                  _data: Data,
+                  addedRelations: Set[String],
+                  removedRelations: Set[String],
+                  forcedSubscribers: Set[String]): Future[Unit] = {
     innerStorage.facade(entityId).fold(
       Future.failed[Unit](new Exception("Facade with id=" + entityId + " is not registered"))
     ) { facade =>
@@ -119,75 +114,81 @@ class AsyncDatahub(_storage: Storage, protected val innerStorage: InnerDataStora
         ))
       ) { data =>
         storage.increase(facade.entity)(data.clock).map { _ =>
-          // who subscribed on that facade
-          innerStorage.getSubscribers(facade.entity.id)
-            .flatMap(innerStorage.facade)
-            .foreach(f => sendChangeToOne(f, facade.entity)(data))
-          // the facades on which that facade depends
-          val relatedFacades = facade.entity.ops.getRelations(data)
-          val oldRelations = innerStorage.getRelations(entityId)
-          (oldRelations -- relatedFacades).foreach(unsubscribe(facade, _))
-          (relatedFacades -- oldRelations).foreach(subscribe(facade, _, None))
+          notifySubscribers(facade.entity, forcedSubscribers)(data)
+
+          removedRelations.foreach(unsubscribe(facade, _))
+          addedRelations.foreach(subscribe(facade, _, None))
         }
       }
     }
   }
 
   def syncRelationClocks(entityId: String, relationClocks: Map[String, Any]): Future[Unit] = {
-    innerStorage.facade(entityId).foreach { f =>
-      relationClocks.foreach { case (rid, clock) => syncRelation(f, rid, Some(clock)) }
+    relationClocks.foreach { case (rid, clock) =>
+      syncData(entityId, rid, Some(clock))
     }
 
     Future.unit
   }
 
-  private def subscribeApproved(facade: EntityFacade, relationId: String, lastKnownDataClockOpt: Option[Any]): Future[Unit] = {
-    innerStorage.addRelation(facade.entity.id, relationId)
-    syncRelation(facade, relationId, lastKnownDataClockOpt)
+  protected def notifySubscribers(entity: Entity)(data: entity.ops.D): Unit =
+    innerStorage
+      .getSubscribers(entity.id) // TODO: + forced subscribers
+      .foreach(subscriberId => sendChangeToOne(subscriberId, entity)(data))
+
+  protected def subscribeApproved(entityFacade: EntityFacade,
+                                  subscriberId: String,
+                                  lastKnownDataClockOpt: Option[Any]): Future[Unit] = {
+    innerStorage.addSubscriber(entityFacade.entity.id, subscriberId)
+    syncData(entityFacade, subscriberId, lastKnownDataClockOpt)
 
     Future.unit
   }
 
-  protected def sendChangeToOne(to: EntityFacade, relation: Entity)(relationData: relation.ops.D): Future[Unit] =
-    to.onUpdate(relation.id, relationData)
+  protected def sendChangeToOne(toId: String, relation: Entity)(relationData: relation.ops.D): Future[Unit] =
+    innerStorage.facade(toId).map(_.onUpdate(relation.id, relationData)) getOrElse Future.unit
 
-  private def syncRelation(facade: EntityFacade, relationId: String, lastKnownDataClockOpt: Option[Any]): Unit = {
-    innerStorage.facade(relationId).foreach { relation =>
-      log.debug("Subscribe entity {} on {} with last known relation clock {}", facade.entity.id, relationId, lastKnownDataClockOpt)
-
-      val relops: relation.entity.ops.type = relation.entity.ops
-
-      storage.getLastClock(relation.entity).foreach(_.flatMap(relops.matchClock).foreach { lastClock =>
-
-        val lastKnownDataClock = lastKnownDataClockOpt.flatMap(relops.matchClock) getOrElse relops.zero.clock
-
-        log.debug("lastClock {}, lastKnownClock {}, {}",
-          Seq(lastClock, lastKnownDataClock, relops.ordering.gt(lastClock, lastKnownDataClock))
-        )
-
-        if (relops.ordering.gt(lastClock, lastKnownDataClock))
-          relation.getUpdatesFrom(lastKnownDataClock).foreach(d =>
-            sendChangeToOne(facade, relation.entity)(d)
-          )
-      })
-    }
-  }
-
-  private def subscribe(facade: EntityFacade, relatedId: String, lastKnownDataClockOpt: Option[Any]): Unit = {
-    log.debug("subscribe {}, {}, {}", facade.entity.id, relatedId, innerStorage.facade(relatedId))
-
-    innerStorage.facade(relatedId).foreach(relation =>
-      relation.requestForApprove(facade.entity).map(
-        if (_) subscribeApproved(facade, relatedId, lastKnownDataClockOpt)
-        else log.warn("Failed to subscribe on {} due untrusted kind {}{}", relatedId, facade.entity.ops.kind, "")
-      )
+  private def syncData(entityFacade: EntityFacade, subscriberId: String, lastKnownDataClockOpt: Option[Any]): Unit = {
+    log.debug(
+      "Subscribe entity {} on {} with last known relation clock {}",
+      subscriberId, entityFacade.entity.id, lastKnownDataClockOpt
     )
+
+    val entityOps: entityFacade.entity.ops.type = entityFacade.entity.ops
+
+    storage.getLastClock(entityFacade.entity).foreach(_.flatMap(entityOps.matchClock).foreach { lastClock =>
+
+      val lastKnownDataClock = lastKnownDataClockOpt.flatMap(entityOps.matchClock) getOrElse entityOps.zero.clock
+
+      log.debug("lastClock {}, lastKnownClock {}, {}",
+        Seq(lastClock, lastKnownDataClock, entityOps.ordering.gt(lastClock, lastKnownDataClock))
+      )
+
+      if (entityOps.ordering.gt(lastClock, lastKnownDataClock))
+        entityFacade.getUpdatesFrom(lastKnownDataClock).foreach(d =>
+          sendChangeToOne(subscriberId, entityFacade.entity)(d)
+        )
+    })
+  }
+
+  protected def subscribe(entityId: String,
+                          subscriberId: String,
+                          subscriberKind: String,
+                          lastKnownDataClockOpt: Option[Any]): Unit = {
+    log.debug("subscribe {}, {}, {}", subscriberId, entityId, innerStorage.facade(entityId))
+
+    innerStorage.facade(entityId).map(entityFacade =>
+      entityFacade.requestForApprove(subscriberId, subscriberKind).map(
+        if (_) subscribeApproved(entityFacade, subscriberId, lastKnownDataClockOpt)
+        else log.warn("Failed to subscribe on {} due untrusted kind {}{}", entityId, subscriberKind, "")
+      )
+    ) getOrElse innerStorage.addSubscriber(entityId, subscriberId)
   }
 
   // TODO: add test
-  private def unsubscribe(facade: EntityFacade, relationId: String): Unit = {
-    log.debug("Unsubscribe entity {} from related {}", Seq(facade.entity.id, relationId): _*)
+  protected def unsubscribe(entityId: String, subscriberId: String): Unit = {
+    log.debug("Unsubscribe entity {} from relation {}{}", subscriberId, entityId, "")
 
-    innerStorage.removeRelation(facade.entity.id, relationId)
+    innerStorage.removeSubscriber(subscriberId, entityId)
   }
 }
