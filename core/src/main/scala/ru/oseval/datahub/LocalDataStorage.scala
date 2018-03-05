@@ -12,22 +12,22 @@ class LocalDataStorage[M[_]](log: Logger,
                              knownData: Map[Entity, Data] = Map.empty) {
   private val entities = mutable.Map[String, Entity](knownData.keys.map(e => e.id -> e).toSeq: _*)
   private val relations = mutable.Set.empty[String]
-  private var notSolidRelations = Map.empty[String, Any]
+  private var notSolidRelations = Map.empty[Entity, Any]
   private val datas = mutable.Map(knownData.map { case (e, v) => e.id -> v }.toSeq: _*)
 
   private def createFacadeDep(e: Entity) = createFacade(e).asInstanceOf[EntityFacade { val entity: e.type }]
 
-  def addEntity(entity: Entity)(_data: entity.ops.D): M[Unit] = {
+  def addEntity(entity: Entity, relations: Set[String], forcedSubscribers: Set[String])(_data: entity.ops.D): M[Unit] = {
     entities.update(entity.id, entity)
     val data: entity.ops.D = get(entity).getOrElse {
       datas.update(entity.id, _data)
       _data
     }
 
-    val relationClocks = entity.ops.getRelations(data)
-      .flatMap(id => datas.get(id).map(d => id -> d.clock)).toMap
+    val relationClocks = entity.ops.getRelations(data)._1 // for any entity data must be total
+      .flatMap(relation => datas.get(relation.id).map(d => relation -> d.clock)).toMap
     // send current clock to avoid unnecessary update sending (from zero to current)
-    datahub.register(createFacadeDep(entity))(data.clock, relationClocks)
+    datahub.register(createFacadeDep(entity))(data.clock, relationClocks, forcedSubscribers)
   }
 
   def addRelation(entity: Entity): Unit = {
@@ -57,7 +57,7 @@ class LocalDataStorage[M[_]](log: Logger,
       updated match {
         case data: AtLeastOnceData if !data.isSolid =>
           notSolidRelations = notSolidRelations.updated(
-            entity.id, current.clock
+            entity, current.clock
           )
 
         case _ =>
@@ -76,18 +76,20 @@ class LocalDataStorage[M[_]](log: Logger,
                                 dataUpdate: entity.ops.D,
                                 updatedData: entity.ops.D) =
     if (entities isDefinedAt entity.id) {
-      val relatedBefore = entity.ops getRelations curData
+      val (addedRelations, removedRelations) = entity.ops getRelations dataUpdate
 
-      val relatedAfter = entity.ops getRelations updatedData
-
-      relations ++= relatedAfter
-      relations --= (relatedBefore -- relatedAfter)
-      datas --= (relatedBefore -- relatedAfter)
+      relations ++= addedRelations.map(_.id)
+      relations --= removedRelations.map(_.id)
+      datas --= removedRelations.map(_.id)
 
       datas.update(entity.id, updatedData)
 
-      datahub.dataUpdated(entity.id, dataUpdate)
-    } else addEntity(entity)(updatedData)
+      datahub.dataUpdated(entity.id, dataUpdate, getForcedFromData)
+    } else {
+      val (addedRelations, _) = entity.ops getRelations dataUpdate
+
+      addEntity(entity, addedRelations)(updatedData)
+    }
 
   def combineEntity(entity: Entity)
                    (upd: entity.ops.D#C => entity.ops.D): M[Unit] = {

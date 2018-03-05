@@ -1,6 +1,6 @@
 package ru.oseval.datahub.data
 
-import ru.oseval.datahub.Entity
+import ru.oseval.datahub.{Entity, EntityFacade}
 
 /**
   * Idempotent (due to [[Data.clock]] and commutative (due to [[DataOps.ordering]]) data model.
@@ -66,9 +66,13 @@ abstract class DataOps {
   def matchClock(clock: Any): Option[D#C] =
     if (clock.getClass == zero.clock.getClass) Some(clock.asInstanceOf[D#C]) else None
 
-  def getRelations(data: D): (Set[String], Set[String])
+  // TODO: store as SetData?
+  def getRelations(data: D): (Set[Entity], Set[Entity])
 
+  // TODO: Entity Ops
   def approveRelation(data: D, relationId: String): Boolean = true
+
+  def createFacadeFromEntity(entity: Entity): Option[EntityFacade]
 }
 
 case class ClockInt[C](cur: C, prev: C)

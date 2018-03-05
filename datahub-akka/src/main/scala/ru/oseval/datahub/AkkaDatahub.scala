@@ -2,12 +2,13 @@ package ru.oseval.datahub
 
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
-import ru.oseval.datahub.AsyncDatahub.{MemoryInnerStorage, Storage}
+import ru.oseval.datahub.AsyncDatahub.Storage
 import ru.oseval.datahub.data.Data
 
 import scala.concurrent.{ExecutionContext, Future}
 
 object AkkaDatahub {
+  private case class RelationAndData(entity: Entity)(val data: entity.ops.D)
   private sealed trait DatahubCommand {
     val entityId: String
   }
@@ -17,9 +18,9 @@ object AkkaDatahub {
                                entityClockOpt: Option[Any]) extends DatahubCommand
   private case class Unsubscribe(entityId: String, subscriberId: String) extends DatahubCommand
   private case class SendChangeToOne(entityId: String,
-                                     relationId: String,
-                                     relationData: Data) extends DatahubCommand
+                                     relationAndData: RelationAndData) extends DatahubCommand
   private case class DataUpdated(entityId: String, data: Data) extends DatahubCommand
+  private case class SyncRelation()
 
   // sharding
   val shardingName = "Entities"
@@ -37,30 +38,34 @@ object AkkaDatahub {
       (id.toLong % numberOfShards).toString
   }
 
-  private class ShardEntityDatahub(storage: Storage)
-                                  (implicit system: ActorSystem, ec: ExecutionContext)
+  private class LocalDatahub(storage: Storage)
+                            (implicit system: ActorSystem, ec: ExecutionContext)
     extends AsyncDatahub(storage)(ec) {
 
     private lazy val region = ClusterSharding(system).shardRegion(shardingName)
 
     override protected def sendChangeToOne(entity: Entity, subscriberId: String)
-                                          (entityData: entity.ops.D): Future[Unit] =
-      innerStorage.facade(subscriberId).map(_.onUpdate(entity.id, entityData)) getOrElse {
-        region ! SendChangeToOne(subscriberId, entity.id, entityData)
+                                          (entityData: entity.ops.D): Option[Future[Unit]] =
+      super.sendChangeToOne(entity, subscriberId)(entityData).orElse {
+        None
       }
   }
 
   private def props(storage: Storage) = Props(classOf[AkkaDatahubActor], storage)
 
   private class AkkaDatahubActor(storage: Storage) extends Actor with ActorLogging {
-    private val localDatahub = new ShardEntityDatahub(context.system)(context.dispatcher)
+    private val localDatahub = new LocalDatahub(storage)(context.system, context.dispatcher)
     override def receive: Receive = {
       case Subscribe(entityId, subscriberId, subscriberKind, lastKnownDataClockOpt) =>
         localDatahub.subscribe(entityId, subscriberId, subscriberKind, lastKnownDataClockOpt)
       case Unsubscribe(entityId, subscriberId) =>
         localDatahub.unsubscribe(entityId, subscriberId)
       case DataUpdated(entityId, data) =>
+        // subscribers is present now
         localDatahub.dataUpdated(entityId, data, Set.empty, Set.empty, Set.empty)
+      case SendChangeToOne(entityId, relationAndData) =>
+        // it is possible that entity is not registered yet
+        localDatahub.sendChangeToOne(relationAndData.entity, entityId)(relationAndData.data)
     }
   }
 }
@@ -70,8 +75,6 @@ case class AkkaDatahub(storage: Storage)
   extends AsyncDatahub(storage)(ec) {
 
   import AkkaDatahub._
-
-  private val actorDatahubImpl = new ShardEntityDatahub(storage: Storage)
 
   private lazy val region: ActorRef = ClusterSharding(system).start(
     typeName = AkkaDatahub.shardingName,
@@ -93,16 +96,19 @@ case class AkkaDatahub(storage: Storage)
     region ! Unsubscribe(entityId, subscriberId)
 
   protected def notifySubscribers(entity: Entity, forcedSubscribers: Set[String])(data: entity.ops.D): Unit = {
-    forcedSubscribers.foreach(subscriberId =>
-      innerStorage.facade(subscriberId).map(_.onUpdate(entity.id, data))
-    )
+    // TODO: force subscribers could be not subscribed yet - need store them for future purposes (add to inner storage)
+    // TODO: !!!but it must be done on the shard entity side!!!
+    forcedSubscribers.foreach(sendChangeToOne(entity, _)(data))
+
     region ! DataUpdated(entity.id, data)
   }
 
-  // TODO: to shard
-  override protected def sendChangeToOne(toId: String, relation: Entity)(relationData: relation.ops.D): Future[Unit] =
-    innerStorage.facade(toId).map(_.onUpdate(relation.id, relationData)) getOrElse {
-      region ! SendChangeToOne(toId, relation.id, relationData)
+  override protected def sendChangeToOne(entity: Entity, subscriberId: String)
+                                        (entityData: entity.ops.D): Option[Future[Unit]] =
+    super.sendChangeToOne(entity, subscriberId)(entityData).orElse {
+      region ! SendChangeToOne(subscriberId, RelationAndData(entity)(entityData))
+
+      None
     }
 
   override def syncRelationClocks(entityId: String, relationClocks: Map[String, Any]): Future[Unit] = {

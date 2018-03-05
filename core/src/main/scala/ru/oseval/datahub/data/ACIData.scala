@@ -1,12 +1,14 @@
 package ru.oseval.datahub.data
 
+import ru.oseval.datahub.Entity
+
 object ACIDataOps {
   def nextClock(current: Long): Long =
     System.currentTimeMillis max (current + 1L)
 }
 
-abstract class ACIDataOps[A](relations: A => (Set[String], Set[String]) =
-                             (_: A) => (Set.empty[String], Set.empty[String])) extends DataOps {
+abstract class ACIDataOps[A](relations: A => (Set[Entity], Set[Entity]) =
+                             (_: A) => (Set.empty[Entity], Set.empty[Entity])) extends DataOps {
   override type D = ACIData[A]
   override val ordering: Ordering[Long] = Ordering.Long
   override val zero: D = ACIData()
@@ -17,7 +19,8 @@ abstract class ACIDataOps[A](relations: A => (Set[String], Set[String]) =
   override def diffFromClock(a: D, from: Long): D =
     if (a.clock > from) a else zero
 
-  override def getRelations(data: D): (Set[String], Set[String]) = data.data.toSet.flatMap(relations)
+  override def getRelations(data: D): (Set[Entity], Set[Entity]) =
+    data.data.map(relations) getOrElse (Set.empty, Set.empty)
 
   override def nextClock(current: Long): Long = ACIDataOps.nextClock(current)
 }
