@@ -12,12 +12,16 @@ object AkkaDatahub {
   private sealed trait DatahubCommand {
     val entityId: String
   }
+  private case class Register(facade: EntityFacade) extends DatahubCommand {
+    val entityId = facade.entity.id
+  }
   private case class Subscribe(entityId: String,
                                subscriberId: String,
                                subscriberKind: String,
                                entityClockOpt: Option[Any]) extends DatahubCommand
   private case class Unsubscribe(entityId: String, subscriberId: String) extends DatahubCommand
   private case class SendChangeToOne(entityId: String,
+                                     entityKind: String,
                                      relationAndData: RelationAndData) extends DatahubCommand
   private case class DataUpdated(entityId: String, data: Data) extends DatahubCommand
   private case class SyncRelation()
@@ -56,16 +60,19 @@ object AkkaDatahub {
   private class AkkaDatahubActor(storage: Storage) extends Actor with ActorLogging {
     private val localDatahub = new LocalDatahub(storage)(context.system, context.dispatcher)
     override def receive: Receive = {
+      case Register(facade) =>
+        // TODO: just for adding facade to inner storage (take it explicitly?)
+        localDatahub.register(facade)(facade.entity.ops.zero.clock, Map.empty, Set.empty)
       case Subscribe(entityId, subscriberId, subscriberKind, lastKnownDataClockOpt) =>
         localDatahub.subscribe(entityId, subscriberId, subscriberKind, lastKnownDataClockOpt)
       case Unsubscribe(entityId, subscriberId) =>
         localDatahub.unsubscribe(entityId, subscriberId)
       case DataUpdated(entityId, data) =>
         // subscribers is present now
-        localDatahub.dataUpdated(entityId, data, Set.empty, Set.empty, Set.empty)
-      case SendChangeToOne(entityId, relationAndData) =>
+        localDatahub.notifySubscribers(facade.entity, Set.empty)(data)
+      case SendChangeToOne(entityId, entityKind, relationAndData) =>
         // it is possible that entity is not registered yet
-        localDatahub.sendChangeToOne(relationAndData.entity, entityId)(relationAndData.data)
+        localDatahub.sendChangeToOne(relationAndData.entity, entityId, entityKind)(relationAndData.data)
     }
   }
 }
@@ -83,6 +90,14 @@ case class AkkaDatahub(storage: Storage)
     extractEntityId = extractEntityId,
     extractShardId = extractShardId)
 
+  override def register(facade: EntityFacade)
+                       (lastClock: facade.entity.ops.D#C,
+                        relationClocks: Map[Entity, Any],
+                        forcedSubscribers: Set[Entity]): Future[Unit] = {
+    region ! Register(facade)
+    super.register(facade)(lastClock, relationClocks, forcedSubscribers)
+  }
+
   override protected def subscribe(entityId: String,
                                    subscriberId: String,
                                    subscriberKind: String,
@@ -96,17 +111,17 @@ case class AkkaDatahub(storage: Storage)
     region ! Unsubscribe(entityId, subscriberId)
 
   protected def notifySubscribers(entity: Entity, forcedSubscribers: Set[String])(data: entity.ops.D): Unit = {
-    // TODO: force subscribers could be not subscribed yet - need store them for future purposes (add to inner storage)
+    // TODO: force subscribers could be not registered yet - need store them for future purposes (add to inner storage)
     // TODO: !!!but it must be done on the shard entity side!!!
     forcedSubscribers.foreach(sendChangeToOne(entity, _)(data))
 
     region ! DataUpdated(entity.id, data)
   }
 
-  override protected def sendChangeToOne(entity: Entity, subscriberId: String)
+  override protected def sendChangeToOne(entity: Entity, subscriberId: String, subscriberKind: String)
                                         (entityData: entity.ops.D): Option[Future[Unit]] =
-    super.sendChangeToOne(entity, subscriberId)(entityData).orElse {
-      region ! SendChangeToOne(subscriberId, RelationAndData(entity)(entityData))
+    super.sendChangeToOne(entity, subscriberId, subscriberKind)(entityData).orElse {
+      region ! SendChangeToOne(subscriberId, subscriberKind, RelationAndData(entity)(entityData))
 
       None
     }

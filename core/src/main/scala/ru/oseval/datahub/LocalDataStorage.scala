@@ -17,12 +17,14 @@ class LocalDataStorage[M[_]](log: Logger,
 
   private def createFacadeDep(e: Entity) = createFacade(e).asInstanceOf[EntityFacade { val entity: e.type }]
 
-  def addEntity(entity: Entity, relations: Set[String], forcedSubscribers: Set[String])(_data: entity.ops.D): M[Unit] = {
+  def addEntity(entity: Entity)(_data: entity.ops.D): M[Unit] = {
     entities.update(entity.id, entity)
     val data: entity.ops.D = get(entity).getOrElse {
       datas.update(entity.id, _data)
       _data
     }
+
+    val (forcedSubscribers, _) = entity.ops getForcedSubscribers data
 
     val relationClocks = entity.ops.getRelations(data)._1 // for any entity data must be total
       .flatMap(relation => datas.get(relation.id).map(d => relation -> d.clock)).toMap
@@ -77,6 +79,7 @@ class LocalDataStorage[M[_]](log: Logger,
                                 updatedData: entity.ops.D) =
     if (entities isDefinedAt entity.id) {
       val (addedRelations, removedRelations) = entity.ops getRelations dataUpdate
+      val (forcedSubscribers, _) = entity.ops getForcedSubscribers updatedData
 
       relations ++= addedRelations.map(_.id)
       relations --= removedRelations.map(_.id)
@@ -84,12 +87,8 @@ class LocalDataStorage[M[_]](log: Logger,
 
       datas.update(entity.id, updatedData)
 
-      datahub.dataUpdated(entity.id, dataUpdate, getForcedFromData)
-    } else {
-      val (addedRelations, _) = entity.ops getRelations dataUpdate
-
-      addEntity(entity, addedRelations)(updatedData)
-    }
+      datahub.dataUpdated(entity.id, dataUpdate, addedRelations, removedRelations, forcedSubscribers)
+    } else addEntity(entity)(updatedData)
 
   def combineEntity(entity: Entity)
                    (upd: entity.ops.D#C => entity.ops.D): M[Unit] = {

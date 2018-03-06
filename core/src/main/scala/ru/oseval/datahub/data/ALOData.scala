@@ -5,6 +5,8 @@ import ru.oseval.datahub.Entity
 import scala.collection.SortedMap
 
 abstract class ALODataOps[A](relations: A => (Set[Entity], Set[Entity]) =
+                             (_: A) => (Set.empty, Set.empty),
+                             forcedSubscribers: A => (Set[String], Set[String]) =
                              (_: A) => (Set.empty, Set.empty)) extends DataOps {
   type D = ALOData[A]
   override val ordering: Ordering.Long.type = Ordering.Long
@@ -13,6 +15,11 @@ abstract class ALODataOps[A](relations: A => (Set[Entity], Set[Entity]) =
   override def getRelations(data: D): (Set[Entity], Set[Entity]) =
     data.data.values.foldLeft((Set.empty[Entity], Set.empty[Entity])) { case ((add, rem), d) =>
       val (a, r) = relations(d)
+      (add ++ a) -> (r ++ rem)
+    }
+  override def getForcedSubscribers(data: D): (Set[String], Set[String]) =
+    data.data.values.foldLeft((Set.empty[String], Set.empty[String])) { case ((add, rem), d) =>
+      val (a, r) = forcedSubscribers(d)
       (add ++ a) -> (r ++ rem)
     }
 

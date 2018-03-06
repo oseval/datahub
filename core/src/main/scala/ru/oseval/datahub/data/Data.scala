@@ -69,10 +69,13 @@ abstract class DataOps {
   // TODO: store as SetData?
   def getRelations(data: D): (Set[Entity], Set[Entity])
 
+  // TODO: by the fact it operates on a total data only and could return just one set
+  def getForcedSubscribers(data: D): (Set[String], Set[String])
+
   // TODO: Entity Ops
   def approveRelation(data: D, relationId: String): Boolean = true
 
-  def createFacadeFromEntity(entity: Entity): Option[EntityFacade]
+  def createFacadeFromEntityId(entityId: String): Option[EntityFacade]
 }
 
 case class ClockInt[C](cur: C, prev: C)
