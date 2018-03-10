@@ -24,7 +24,8 @@ class LocalDataStorage[M[_]](log: Logger,
       _data
     }
 
-    val (forcedSubscribers, _) = entity.ops getForcedSubscribers data
+    // TODO: return abstract shared facade?
+    val forcedSubscribers = entity.ops getForcedSubscribers data
 
     val relationClocks = entity.ops.getRelations(data)._1 // for any entity data must be total
       .flatMap(relation => datas.get(relation.id).map(d => relation -> d.clock)).toMap
@@ -79,7 +80,7 @@ class LocalDataStorage[M[_]](log: Logger,
                                 updatedData: entity.ops.D) =
     if (entities isDefinedAt entity.id) {
       val (addedRelations, removedRelations) = entity.ops getRelations dataUpdate
-      val (forcedSubscribers, _) = entity.ops getForcedSubscribers updatedData
+      val forcedSubscribers = entity.ops getForcedSubscribers updatedData
 
       relations ++= addedRelations.map(_.id)
       relations --= removedRelations.map(_.id)
@@ -145,8 +146,8 @@ class LocalDataStorage[M[_]](log: Logger,
     * @return
     */
   def checkDataIntegrity: Boolean = {
-    if (notSolidRelations.nonEmpty) (entities -- relations).keys.headOption.foreach { eid =>
-      datahub.syncRelationClocks(eid, notSolidRelations)
+    if (notSolidRelations.nonEmpty) (entities -- relations).headOption.foreach { case (_, e) =>
+      datahub.syncRelationClocks(e.id, e.kind, notSolidRelations)
     }
 
     notSolidRelations.isEmpty

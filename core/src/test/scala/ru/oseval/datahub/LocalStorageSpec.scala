@@ -22,8 +22,8 @@ class LocalStorageSpec extends FlatSpecLike
 
   val time = System.currentTimeMillis
   val product1Data = ProductData("Product1", 4, time)
-  val warehouseData1 = ALOData(product1.id)(ClockInt(time + 3, 0L))
-  val warehouseData2 = warehouseData1.updated(product2.id, time + 4)
+  val warehouseData1 = ALOData(product1.productId)(ClockInt(time + 3, 0L))
+  val warehouseData2 = warehouseData1.updated(product2.productId, time + 4)
   val warehouseDataTotal = WarehouseOps.combine(warehouseData1, warehouseData2)
 
   // need at least once data here because we tests not solid data
@@ -37,10 +37,18 @@ class LocalStorageSpec extends FlatSpecLike
   type Id[T] = T
   class SpiedDatahub extends Datahub[Id] {
     override def register(facade: EntityFacade)
-                         (lastClock: facade.entity.ops.D#C, relationClocks: Map[String, Any]): Id[Unit] = ()
-    override def setForcedSubscribers(entityId: String, forced: Set[EntityFacade]): Id[Unit] = ()
-    override def dataUpdated(entityId: String, _data: Data): Id[Unit] = ()
-    override def syncRelationClocks(entityId: String, relationClocks: Map[String, Any]): Id[Unit] = ()
+                         (lastClock: facade.entity.ops.D#C,
+                          relationClocks: Map[Entity, Any],
+                          forcedSubscribers: Set[EntityFacade]): Id[Unit] = ()
+    override def dataUpdated(entityId: String,
+                             _data: Data,
+                             addedRelations: Set[Entity],
+                             removedRelations: Set[Entity],
+                             forcedSubscribers: Set[EntityFacade]): Id[Unit] = ()
+
+    override def syncRelationClocks(entityId: String,
+                                    entityKind: String,
+                                    relationClocks: Map[Entity, Any]): Id[Unit] = ()
   }
 
   def makeStorage(knownData: Map[Entity, Data] = Map.empty): (LocalDataStorage[Id], Datahub[Id]) = {
@@ -64,7 +72,7 @@ class LocalStorageSpec extends FlatSpecLike
 
     verify(listener).register(
       null.asInstanceOf[EntityFacade { val entity: warehouse1.type }]
-    )(warehouseData1.clock, Map(product1.id -> product1Data.clock))
+    )(warehouseData1.clock, Map(product1 -> product1Data.clock), Set.empty)
   }
 
   it should "sync relation when it is not solid" in {
@@ -74,15 +82,15 @@ class LocalStorageSpec extends FlatSpecLike
 
     storage.checkDataIntegrity shouldBe false
     verify(listener).syncRelationClocks(
-      warehouse1.id,
-      Map(warehouse2.id -> warehouse2Data1.clock)
+      warehouse1.id, warehouse1.kind,
+      Map(warehouse2 -> warehouse2Data1.clock)
     )
   }
 
   it should "notify when local entity updated" in {
     storage.combineEntity(warehouse1)(_ => warehouseData2)
 
-    verify(listener).dataUpdated(warehouse1.id, warehouseData2)
+    verify(listener).dataUpdated(warehouse1.id, warehouseData2, Set.empty, Set.empty, Set.empty)
 
     storage.get(warehouse1) shouldBe Some(warehouseDataTotal)
     storage.get[ProductData](product1.id) shouldBe Some(product1Data)

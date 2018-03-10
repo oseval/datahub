@@ -1,13 +1,12 @@
 package ru.oseval.datahub.data
 
-import ru.oseval.datahub.Entity
+import ru.oseval.datahub.{Entity, EntityFacade}
 
 import scala.collection.SortedMap
 
 abstract class ALODataOps[A](relations: A => (Set[Entity], Set[Entity]) =
                              (_: A) => (Set.empty, Set.empty),
-                             forcedSubscribers: A => (Set[String], Set[String]) =
-                             (_: A) => (Set.empty, Set.empty)) extends DataOps {
+                             forcedSubscribers: A => Set[EntityFacade] = (_: A) => Set.empty) extends DataOps {
   type D = ALOData[A]
   override val ordering: Ordering.Long.type = Ordering.Long
   override val zero: ALOData[A] = ALOData[A]()
@@ -17,11 +16,8 @@ abstract class ALODataOps[A](relations: A => (Set[Entity], Set[Entity]) =
       val (a, r) = relations(d)
       (add ++ a) -> (r ++ rem)
     }
-  override def getForcedSubscribers(data: D): (Set[String], Set[String]) =
-    data.data.values.foldLeft((Set.empty[String], Set.empty[String])) { case ((add, rem), d) =>
-      val (a, r) = forcedSubscribers(d)
-      (add ++ a) -> (r ++ rem)
-    }
+  override def getForcedSubscribers(data: D): Set[EntityFacade] =
+    data.data.values.foldLeft(Set.empty[EntityFacade])((f, d) => f ++ forcedSubscribers(d))
 
   override def diffFromClock(a: ALOData[A], from: Long): ALOData[A] =
     ALOData(a.data.filterKeys(_ > from), a.clock, from, a.further)

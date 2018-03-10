@@ -8,7 +8,6 @@ import scala.concurrent.duration.FiniteDuration
 trait Entity {
   val id: String
   val kind: String
-  // TODO: ops could be taken from a map kind -> ops if the Entity will contains a kind
   val ops: DataOps
 
   /**

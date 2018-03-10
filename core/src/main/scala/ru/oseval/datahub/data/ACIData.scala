@@ -1,6 +1,6 @@
 package ru.oseval.datahub.data
 
-import ru.oseval.datahub.Entity
+import ru.oseval.datahub.{Entity, EntityFacade}
 
 object ACIDataOps {
   def nextClock(current: Long): Long =
@@ -9,8 +9,7 @@ object ACIDataOps {
 
 abstract class ACIDataOps[A](relations: A => (Set[Entity], Set[Entity]) =
                              (_: A) => (Set.empty[Entity], Set.empty[Entity]),
-                             forcedSubscribers: A => (Set[String], Set[String]) =
-                             (_: A) => (Set.empty, Set.empty)) extends DataOps {
+                             forcedSubscribers: A => Set[EntityFacade] = (_: A) => Set.empty) extends DataOps {
   override type D = ACIData[A]
   override val ordering: Ordering[Long] = Ordering.Long
   override val zero: D = ACIData()
@@ -24,8 +23,8 @@ abstract class ACIDataOps[A](relations: A => (Set[Entity], Set[Entity]) =
   override def getRelations(data: D): (Set[Entity], Set[Entity]) =
     data.data.map(relations) getOrElse (Set.empty, Set.empty)
 
-  override def getForcedSubscribers(data: D): (Set[String], Set[String]) =
-    data.data.map(forcedSubscribers) getOrElse (Set.empty, Set.empty)
+  override def getForcedSubscribers(data: D): Set[EntityFacade] =
+    data.data.map(forcedSubscribers) getOrElse Set.empty
 
   override def nextClock(current: Long): Long = ACIDataOps.nextClock(current)
 }

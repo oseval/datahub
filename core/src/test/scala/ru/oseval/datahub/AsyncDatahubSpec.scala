@@ -25,7 +25,7 @@ class AsyncDatahubSpec extends FlatSpecLike
   private implicit val timeout = 3.seconds
 
   def storage = new MemoryStorage
-  def createDatahub = new AsyncDatahub(storage, new datahub.AsyncDatahub.MemoryInnerStorage)(ec)
+  def createDatahub = new AsyncDatahub(storage)(ec)
 
   behavior of "Datahub"
 
@@ -35,7 +35,7 @@ class AsyncDatahubSpec extends FlatSpecLike
 
     when(facade.entity).thenReturn(ProductEntity(1))
 
-    datahub.register(facade)(facade.entity.ops.zero.clock, Map.empty).futureValue
+    datahub.register(facade)(facade.entity.ops.zero.clock, Map.empty, Set.empty).futureValue
   }
 
   it should "subscribe on related data entities" in {
@@ -54,23 +54,23 @@ class AsyncDatahubSpec extends FlatSpecLike
     val warehouseData = ALOData(product.id)(ClockInt(knownClocks, 0L))
 
     // Register product
-    datahub.register(productFacade)(productData.clock, Map.empty).futureValue
+    datahub.register(productFacade)(productData.clock, Map.empty, Set.empty).futureValue
 
     // Product entity data is updated
     val newProductData = ProductData("TV", 1, System.currentTimeMillis)
 
-    datahub.dataUpdated(product.id, newProductData).futureValue
+    datahub.dataUpdated(product.id, newProductData, Set.empty, Set.empty, Set.empty).futureValue
 
     // Register warehouse which depends on product, get updates from it
     when(productFacade.getUpdatesFrom(productData.clock)).thenReturn(Future.successful(newProductData))
-    when(productFacade.requestForApprove(warehouse)).thenReturn(Future.successful(true))
+    when(productFacade.requestForApprove(warehouse.id, warehouse.kind)).thenReturn(Future.successful(true))
     when(warehouseFacade.onUpdate(product.id, newProductData)).thenReturn(Future.unit)
 
-    datahub.register(warehouseFacade)(warehouseData.clock, Map(product.id -> ProductOps.zero.clock)).futureValue
+    datahub.register(warehouseFacade)(warehouseData.clock, Map(product -> ProductOps.zero.clock), Set.empty).futureValue
 
     eventually {
       verify(productFacade).getUpdatesFrom(productData.clock)
-      verify(productFacade).requestForApprove(warehouse)
+      verify(productFacade).requestForApprove(warehouse.id, warehouse.kind)
       verify(warehouseFacade).onUpdate(product.id, newProductData)
     }
   }
@@ -90,18 +90,18 @@ class AsyncDatahubSpec extends FlatSpecLike
     when(warehouseFacade.entity).thenReturn(warehouse)
 
     // Register product
-    datahub.register(productFacade)(productData.clock, Map.empty).futureValue
+    datahub.register(productFacade)(productData.clock, Map.empty, Set.empty).futureValue
 
     // Register warehouse which depends on product, get updates from it
-    when(productFacade.requestForApprove(warehouse)).thenReturn(Future.successful(true))
+    when(productFacade.requestForApprove(warehouse.id, warehouse.kind)).thenReturn(Future.successful(true))
 
-    datahub.register(warehouseFacade)(warehouseData.clock, Map(product.id → productData.clock)).futureValue
+    datahub.register(warehouseFacade)(warehouseData.clock, Map(product -> productData.clock), Set.empty).futureValue
 
-    verify(productFacade).requestForApprove(warehouse)
+    verify(productFacade).requestForApprove(warehouse.id, warehouse.kind)
 
     // Product entity data is updated
     val newProductData = ProductData("TV", 1, System.currentTimeMillis)
-    datahub.dataUpdated(product.id, newProductData).futureValue
+    datahub.dataUpdated(product.id, newProductData, Set.empty, Set.empty, Set.empty).futureValue
 
     verify(warehouseFacade).onUpdate(product.id, newProductData)
   }
@@ -119,22 +119,22 @@ class AsyncDatahubSpec extends FlatSpecLike
     when(warehouseFacade.entity).thenReturn(warehouse)
 
     // Register product
-    datahub.register(productFacade)(productFacade.entity.ops.zero.clock, Map.empty).futureValue
+    datahub.register(productFacade)(productFacade.entity.ops.zero.clock, Map.empty, Set.empty).futureValue
 
     // Register warehouse
-    datahub.register(warehouseFacade)(warehouseFacade.entity.ops.zero.clock, Map.empty).futureValue
+    datahub.register(warehouseFacade)(warehouseFacade.entity.ops.zero.clock, Map.empty, Set.empty).futureValue
 
     // Send update with new related entity
-    when(productFacade.requestForApprove(warehouse)).thenReturn(Future.successful(true))
+    when(productFacade.requestForApprove(warehouse.id, warehouse.kind)).thenReturn(Future.successful(true))
 
     val newWarehouseData = ALOData(product.id)(ClockInt(System.currentTimeMillis, 0L))
-    datahub.dataUpdated(warehouse.id, newWarehouseData).futureValue
+    datahub.dataUpdated(warehouse.id, newWarehouseData, Set.empty, Set.empty, Set.empty).futureValue
 
-    verify(productFacade).requestForApprove(warehouse)
+    verify(productFacade).requestForApprove(warehouse.id, warehouse.kind)
 
     // Product entity data is updated
     val newProductData = ProductData("TV", 1, System.currentTimeMillis)
-    datahub.dataUpdated(product.id, newProductData).futureValue
+    datahub.dataUpdated(product.id, newProductData, Set.empty, Set.empty, Set.empty).futureValue
 
     verify(warehouseFacade).onUpdate(product.id, newProductData)
   }
@@ -153,24 +153,24 @@ class AsyncDatahubSpec extends FlatSpecLike
     when(warehouseFacade.entity).thenReturn(warehouse)
 
     // Register product
-    datahub.register(productFacade)(productFacade.entity.ops.zero.clock, Map.empty).futureValue
+    datahub.register(productFacade)(productFacade.entity.ops.zero.clock, Map.empty, Set.empty).futureValue
 
     // Register warehouse
-    when(productFacade.requestForApprove(warehouse)).thenReturn(Future.successful(true))
+    when(productFacade.requestForApprove(warehouse.id, warehouse.kind)).thenReturn(Future.successful(true))
 
     datahub.register(warehouseFacade)(
-      warehouseData.clock, Map(product.id -> productFacade.entity.ops.zero.clock)
+      warehouseData.clock, Map(product -> productFacade.entity.ops.zero.clock), Set.empty
     ).futureValue
 
-    verify(productFacade).requestForApprove(warehouse)
+    verify(productFacade).requestForApprove(warehouse.id, warehouse.kind)
 
     // Product entity data is updated
     val newProductData = ProductData("TV", 1, System.currentTimeMillis)
-    datahub.dataUpdated(product.id, newProductData).futureValue
+    datahub.dataUpdated(product.id, newProductData, Set.empty, Set.empty, Set.empty).futureValue
 
     verify(warehouseFacade).onUpdate(product.id, newProductData)
 
-    datahub.syncRelationClocks(warehouse.id, Map(product.id -> product.ops.zero.clock))
+    datahub.syncRelationClocks(warehouse.id, warehouse.kind, Map(product -> product.ops.zero.clock))
 
     verify(warehouseFacade).onUpdate(product.id, newProductData)
   }
