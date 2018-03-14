@@ -40,14 +40,12 @@ class LocalStorageSpec extends FlatSpecLike
                          (lastClock: facade.entity.ops.D#C,
                           relationClocks: Map[Entity, Any],
                           forcedSubscribers: Set[EntityFacade]): Id[Unit] = ()
-    override def dataUpdated(entityId: String,
-                             _data: Data,
-                             addedRelations: Set[Entity],
-                             removedRelations: Set[Entity],
-                             forcedSubscribers: Set[EntityFacade]): Id[Unit] = ()
-
-    override def syncRelationClocks(entityId: String,
-                                    entityKind: String,
+    override def subscribe(entity: Entity,
+                           subscriber: Entity,
+                           lastKnownDataClockOpt: Option[Any]): Unit = ()
+    override def unsubscribe(entity: Entity, subscriber: Entity): Unit = ()
+    override def dataUpdated(entity: Entity, forcedSubscribers: Set[EntityFacade])(data: entity.ops.D): Id[Unit] = ()
+    override def syncRelationClocks(entity: Entity,
                                     relationClocks: Map[Entity, Any]): Id[Unit] = ()
   }
 
@@ -81,16 +79,13 @@ class LocalStorageSpec extends FlatSpecLike
     storage.combineRelation(warehouse2.id, warehouse2Data3)
 
     storage.checkDataIntegrity shouldBe false
-    verify(listener).syncRelationClocks(
-      warehouse1.id, warehouse1.kind,
-      Map(warehouse2 -> warehouse2Data1.clock)
-    )
+    verify(listener).syncRelationClocks(warehouse1, Map(warehouse2 -> warehouse2Data1.clock))
   }
 
   it should "notify when local entity updated" in {
     storage.combineEntity(warehouse1)(_ => warehouseData2)
 
-    verify(listener).dataUpdated(warehouse1.id, warehouseData2, Set.empty, Set.empty, Set.empty)
+    verify(listener).dataUpdated(warehouse1, Set.empty)(warehouseData2)
 
     storage.get(warehouse1) shouldBe Some(warehouseDataTotal)
     storage.get[ProductData](product1.id) shouldBe Some(product1Data)

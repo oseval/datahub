@@ -7,14 +7,14 @@ import ru.oseval.datahub.data.Data
 
 import scala.concurrent.{ExecutionContext, Future}
 
-object AkkaDatahub {
+private[datahub] object AkkaDatahub {
   private case class RelationAndData(entity: Entity)(_data: Data) {
     val data: entity.ops.D = _data.asInstanceOf[entity.ops.D]
   }
-  private sealed trait DatahubCommand {
+  sealed trait DatahubCommand {
     val entityId: String
   }
-  private case class Register(facade: EntityFacade) extends DatahubCommand {
+  case class Register(facade: EntityFacade) extends DatahubCommand {
     val entityId = facade.entity.id
   }
   private case class Subscribe(entity: Entity,
@@ -29,7 +29,7 @@ object AkkaDatahub {
   private case class RelationDataUpdated(entityId: String,
                                          entityKind: String,
                                          relationAndData: RelationAndData) extends DatahubCommand
-  private case class DataUpdated(entity: Entity, data: Data) extends DatahubCommand {
+  case class DataUpdated(entity: Entity, data: Data) extends DatahubCommand {
     val entityId: String = entity.id
   }
   private case class SyncRelation()
@@ -63,7 +63,7 @@ object AkkaDatahub {
       }
   }
 
-  private def props(storage: Storage) = Props(classOf[AkkaDatahubActor], storage)
+  private[datahub] def props(storage: Storage) = Props(classOf[AkkaDatahubActor], storage)
 
   private class AkkaDatahubActor(storage: Storage) extends Actor with ActorLogging {
     private val localDatahub = new LocalDatahub(storage)(context.system, context.dispatcher)

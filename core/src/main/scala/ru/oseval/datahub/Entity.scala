@@ -7,7 +7,6 @@ import scala.concurrent.duration.FiniteDuration
 
 trait Entity {
   val id: String
-  val kind: String
   val ops: DataOps
 
   /**
@@ -36,9 +35,8 @@ trait EntityFacade {
 
   /**
     * When an entity is not trust to the relation kind then a subscription must approved
-    * @param relationId
-    * @param kind
+    * @param relation
     * @return
     */
-  def requestForApprove(relationId: String, kind: String)(implicit timeout: FiniteDuration): Future[Boolean]
+  def requestForApprove(relation: Entity)(implicit timeout: FiniteDuration): Future[Boolean]
 }

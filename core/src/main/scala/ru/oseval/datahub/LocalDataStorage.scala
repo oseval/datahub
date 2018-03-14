@@ -88,7 +88,9 @@ class LocalDataStorage[M[_]](log: Logger,
 
       datas.update(entity.id, updatedData)
 
-      datahub.dataUpdated(entity.id, dataUpdate, addedRelations, removedRelations, forcedSubscribers)
+      addedRelations.foreach(datahub.subscribe(_, entity, None))
+      removedRelations.foreach(datahub.unsubscribe(_, entity))
+      datahub.dataUpdated(entity, forcedSubscribers)(dataUpdate)
     } else addEntity(entity)(updatedData)
 
   def combineEntity(entity: Entity)
@@ -147,7 +149,7 @@ class LocalDataStorage[M[_]](log: Logger,
     */
   def checkDataIntegrity: Boolean = {
     if (notSolidRelations.nonEmpty) (entities -- relations).headOption.foreach { case (_, e) =>
-      datahub.syncRelationClocks(e.id, e.kind, notSolidRelations)
+      datahub.syncRelationClocks(e, notSolidRelations)
     }
 
     notSolidRelations.isEmpty

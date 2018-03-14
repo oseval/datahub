@@ -1,16 +1,14 @@
 package ru.oseval.datahub
 
-import ru.oseval.datahub.data.Data
-
 trait Datahub[M[_]] {
   def register(facade: EntityFacade)
               (lastClock: facade.entity.ops.D#C,
                relationClocks: Map[Entity, Any],
                forcedSubscribers: Set[EntityFacade]): M[Unit]
-  def dataUpdated(entityId: String, // TODO: may be EntityFacade instead?
-                  _data: Data,
-                  addedRelations: Set[Entity],
-                  removedRelations: Set[Entity],
-                  forcedSubscribers: Set[EntityFacade]): M[Unit]
-  def syncRelationClocks(entityId: String, entityKind: String, relationClocks: Map[Entity, Any]): M[Unit]
+  def subscribe(entity: Entity, // this must be entity to get ops and compare clocks
+                subscriber: Entity,
+                lastKnownDataClockOpt: Option[Any]): Unit
+  def unsubscribe(entity: Entity, subscriber: Entity): Unit
+  def dataUpdated(entity: Entity, forcedSubscribers: Set[EntityFacade])(data: entity.ops.D): M[Unit]
+  def syncRelationClocks(entity: Entity, relationClocks: Map[Entity, Any]): M[Unit]
 }

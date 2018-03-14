@@ -6,7 +6,7 @@ import ru.oseval.datahub.data._
 object WarehouseTestData {
   type WarehouseId = String
 
-  object WarehouseOps extends ALODataOps[Int](pid => (Set.empty, Set(ProductEntity(pid))), _ => Set.empty) {
+  object WarehouseOps extends ALODataOps[Int](pid => (Set(ProductEntity(pid)), Set.empty), _ => Set.empty) {
     override def createFacadeFromEntityId(entityId: String): Option[EntityFacade] = None
   }
 
