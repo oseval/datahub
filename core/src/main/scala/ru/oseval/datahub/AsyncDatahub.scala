@@ -116,11 +116,9 @@ class AsyncDatahub(_storage: Storage)
 
   protected def subscribeApproved(entityFacade: EntityFacade,
                                   subscriber: Entity,
-                                  lastKnownDataClockOpt: Option[Any]): Future[Unit] = {
+                                  lastKnownDataClockOpt: Option[Any]): Unit = {
     innerStorage.addSubscriber(entityFacade.entity.id, subscriber)
     syncData(entityFacade, subscriber, lastKnownDataClockOpt)
-
-    Future.unit
   }
 
   def sendChangeToOne(entity: Entity, subscriber: Entity)
@@ -156,19 +154,19 @@ class AsyncDatahub(_storage: Storage)
 
   def subscribe(entity: Entity, // this must be entity to get ops and compare clocks
                 subscriber: Entity,
-                lastKnownDataClockOpt: Option[Any]): Unit = {
+                lastKnownDataClockOpt: Option[Any]): Future[Unit] = {
     log.debug("subscribe {}, {}, {}", subscriber, entity.id, innerStorage.facade(entity.id))
 
     // we must subscribe it, otherways subscriber will not receive any changes from entity while it is not registered
     // TODO: we need to compare stored and lastKnown clocks and force entity start only if it need it
     innerStorage.facade(entity.id)
       .orElse(entity.ops.createFacadeFromEntityId(entity.id))
-      .foreach(entityFacade =>
+      .map(entityFacade =>
         entityFacade.requestForApprove(subscriber).map(
           if (_) subscribeApproved(entityFacade, subscriber, lastKnownDataClockOpt)
           else log.warn("Failed to subscribe on {} due untrusted kind {}{}", entity.id, subscriber.ops.kind, "")
         )
-      )
+      ).getOrElse(Future.unit)
   }
 
   // TODO: add test

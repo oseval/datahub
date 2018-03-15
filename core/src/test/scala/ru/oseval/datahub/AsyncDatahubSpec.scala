@@ -106,12 +106,14 @@ class AsyncDatahubSpec extends FlatSpecLike
   }
 
   // TODO: move it to LocalStorageSpec
-  it should "subscribe entity to new related entities" in {
+  it should "subscribe entity on new related entities" in {
     val datahub = createDatahub
 
     val product = ProductEntity(1)
     val productFacade = mock[EntityFacade]
     when(productFacade.entity).thenReturn(product)
+    val productZero: productFacade.entity.ops.D = productFacade.entity.ops.zero
+    val productZeroClock: productFacade.entity.ops.D#C = productFacade.entity.ops.zero.clock
 
     // cache of product data
     val warehouse = WarehouseEntity("1")
@@ -119,16 +121,19 @@ class AsyncDatahubSpec extends FlatSpecLike
     when(warehouseFacade.entity).thenReturn(warehouse)
 
     // Register product
-    datahub.register(productFacade)(productFacade.entity.ops.zero.clock, Map.empty, Set.empty).futureValue
+    datahub.register(productFacade)(productZeroClock, Map.empty, Set.empty).futureValue
 
     // Register warehouse
     datahub.register(warehouseFacade)(warehouseFacade.entity.ops.zero.clock, Map.empty, Set.empty).futureValue
 
     // Send update with new related entity
     when(productFacade.requestForApprove(warehouse)).thenReturn(Future.successful(true))
+    when(productFacade.getUpdatesFrom(productZeroClock)).thenReturn(Future.successful(productZero))
 
-    val newWarehouseData = warehouse.ops.zero.updated(product.productId, System.currentTimeMillis)
-    datahub.dataUpdated(warehouse, Set.empty)(newWarehouseData).futureValue
+//    val newWarehouseData = warehouse.ops.zero.updated(product.productId, System.currentTimeMillis)
+//    datahub.dataUpdated(warehouse, Set.empty)(newWarehouseData).futureValue
+
+    datahub.subscribe(product, warehouse, None)
 
     verify(productFacade).requestForApprove(warehouse)
 
