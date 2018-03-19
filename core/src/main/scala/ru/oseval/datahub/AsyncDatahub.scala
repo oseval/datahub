@@ -63,7 +63,7 @@ import AsyncDatahub._
 class AsyncDatahub(_storage: Storage)
                   (implicit val ec: ExecutionContext) extends Datahub[Future] {
   private val storage = new MemoryFallbackStorage(_storage)(ec)
-  private val innerStorage = new MemoryInnerStorage
+  protected val innerStorage = new MemoryInnerStorage
   protected val log = LoggerFactory.getLogger(getClass)
   private implicit val timeout: FiniteDuration = 3.seconds
 

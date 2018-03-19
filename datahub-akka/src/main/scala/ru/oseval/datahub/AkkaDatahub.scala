@@ -18,21 +18,23 @@ private[datahub] object AkkaDatahub {
     val entityId = facade.entity.id
   }
   private case class Subscribe(entity: Entity,
-                               subscriberId: String,
-                               subscriberKind: String,
+                               subscriber: Entity,
                                entityClockOpt: Option[Any]) extends DatahubCommand {
     val entityId: String = entity.id
   }
-  private case class Unsubscribe(entity: Entity, subscriberId: String, subscriberKind: String) extends DatahubCommand {
+  private case class Unsubscribe(entity: Entity, subscriber: Entity) extends DatahubCommand {
     val entityId: String = entity.id
   }
-  private case class RelationDataUpdated(entityId: String,
-                                         entityKind: String,
-                                         relationAndData: RelationAndData) extends DatahubCommand
+  private case class RelationDataUpdated(entity: Entity,
+                                         relationAndData: RelationAndData) extends DatahubCommand {
+    val entityId: String = entity.id
+  }
   case class DataUpdated(entity: Entity, data: Data) extends DatahubCommand {
     val entityId: String = entity.id
   }
-  private case class SyncRelation()
+  private case class SyncRelation(entity: Entity, subscriberId: String, clock: Any) {
+    val entityId: String = entity.id
+  }
 
   // sharding
   val shardingName = "Entities"
@@ -56,11 +58,16 @@ private[datahub] object AkkaDatahub {
 
 //    private lazy val region = ClusterSharding(system).shardRegion(shardingName)
 
-    override def sendChangeToOne(entity: Entity, subscriberId: String, subscriberKind: String)
+    override def sendChangeToOne(entity: Entity, subscriber: Entity)
                                 (entityData: entity.ops.D): Option[Future[Unit]] =
-      super.sendChangeToOne(entity, subscriberId, subscriberKind)(entityData).orElse {
+      super.sendChangeToOne(entity, subscriber)(entityData).orElse {
         None
       }
+
+    // TODO: move it to AsyncDatahub
+    def facade(entity: Entity): Option[EntityFacade] = innerStorage.facade(entity.id).orElse(
+      entity.ops.createFacadeFromEntityId(entity.id)
+    )
   }
 
   private[datahub] def props(storage: Storage) = Props(classOf[AkkaDatahubActor], storage)
@@ -71,10 +78,10 @@ private[datahub] object AkkaDatahub {
       case Register(facade) =>
         // TODO: just for adding facade to inner storage (take it explicitly?)
         localDatahub.register(facade)(facade.entity.ops.zero.clock, Map.empty, Set.empty)
-      case Subscribe(entity, subscriberId, subscriberKind, lastKnownDataClockOpt) =>
-        localDatahub.subscribe(entity, subscriberId, subscriberKind, lastKnownDataClockOpt)
-      case Unsubscribe(entity, subscriberId, subscriberKind) =>
-        localDatahub.unsubscribe(entity, subscriberId, subscriberKind)
+      case Subscribe(entity, subscriber, lastKnownDataClockOpt) =>
+        localDatahub.subscribe(entity, subscriber, lastKnownDataClockOpt)
+      case Unsubscribe(entity, subscriber) =>
+        localDatahub.unsubscribe(entity, subscriber)
       case DataUpdated(entity, data) =>
         // subscribers is present now
         // TODO: drop asInstanceOf
@@ -83,7 +90,9 @@ private[datahub] object AkkaDatahub {
         // it is possible that entity is not registered yet
         // TODO:
         localDatahub.sendChangeToOne(relationAndData.entity, entityId, entityKind)(relationAndData.data)
-      case SyncRelations() =>
+      case SyncRelations(entity, subscriberId, clock) =>
+
+        // TODO: take inner storage
         localDatahub.syncData(innerStorage.facade(entityId), subscriberId, subscriberKind, lastKnownClocks)
     }
   }
@@ -138,7 +147,7 @@ case class AkkaDatahub(storage: Storage)
       None
     }
 
-  override def syncRelationClocks(entityId: String, relationClocks: Map[String, Any]): Future[Unit] = {
-    relationClocks.foreach { case (rid, clock) => region ! SyncRelation(entityId, rid, clock) }
+  override def syncRelationClocks(entityId: String, relationClocks: Map[Entity, Any]): Future[Unit] = {
+    relationClocks.foreach { case (relation, clock) => region ! SyncRelation(relation, entityId, clock) }
   }
 }
