@@ -24,7 +24,7 @@ object AsyncDatahub {
       }
   }
 
-  private class MemoryInnerStorage /*extends InnerDataStorage */{
+  private[datahub] class MemoryInnerStorage /*extends InnerDataStorage */{
     protected val trieSetEmpty: TrieMap[Entity, Boolean] = TrieMap.empty[Entity, Boolean]
 
     private val facades: TrieMap[String, EntityFacade] =
@@ -65,7 +65,12 @@ class AsyncDatahub(_storage: Storage)
   private val storage = new MemoryFallbackStorage(_storage)(ec)
   protected val innerStorage = new MemoryInnerStorage
   protected val log = LoggerFactory.getLogger(getClass)
-  private implicit val timeout: FiniteDuration = 3.seconds
+  protected implicit val timeout: FiniteDuration = 3.seconds
+
+  // TODO: perhaps this is not expected
+  def facade(entity: Entity): Option[EntityFacade] = innerStorage.facade(entity.id).orElse(
+    entity.ops.createFacadeFromEntityId(entity.id)
+  )
 
   override def register(facade: EntityFacade)
                        (lastClock: facade.entity.ops.D#C,
@@ -98,17 +103,13 @@ class AsyncDatahub(_storage: Storage)
       notifySubscribers(entity, forcedSubscribers)(data)
     )
 
-  def syncRelationClocks(entity: Entity, relationClocks: Map[Entity, Any]): Future[Unit] = {
+  def syncRelationClocks(entity: Entity, relationClocks: Map[Entity, Any]): Unit =
     relationClocks.foreach { case (relation, clock) =>
       innerStorage.facade(relation.id)
         .orElse(relation.ops.createFacadeFromEntityId(relation.id))
         .foreach(syncData(_, entity, Some(clock)))
     }
 
-    Future.unit
-  }
-
-  // TODO: private within pacakge
   def notifySubscribers(entity: Entity, forcedSubscribers: Set[EntityFacade])(data: entity.ops.D): Unit = {
     forcedSubscribers.foreach(f => sendChangeToOne(entity, f.entity)(data))
     innerStorage.getSubscribers(entity.id).foreach(sendChangeToOne(entity, _)(data))
@@ -123,11 +124,9 @@ class AsyncDatahub(_storage: Storage)
 
   def sendChangeToOne(entity: Entity, subscriber: Entity)
                      (entityData: entity.ops.D): Option[Future[Unit]] =
-    innerStorage.facade(subscriber.id)
-      .orElse(entity.ops.createFacadeFromEntityId(subscriber.id))
-      .map(_.onUpdate(entity.id, entityData))
+    facade(subscriber).map(_.onUpdate(entity.id, entityData))
 
-  private def syncData(entityFacade: EntityFacade,
+  protected def syncData(entityFacade: EntityFacade,
                        subscriber: Entity,
                        lastKnownDataClockOpt: Option[Any]): Unit = {
     log.debug(
@@ -159,20 +158,20 @@ class AsyncDatahub(_storage: Storage)
 
     // we must subscribe it, otherways subscriber will not receive any changes from entity while it is not registered
     // TODO: we need to compare stored and lastKnown clocks and force entity start only if it need it
-    innerStorage.facade(entity.id)
-      .orElse(entity.ops.createFacadeFromEntityId(entity.id))
-      .map(entityFacade =>
-        entityFacade.requestForApprove(subscriber).map(
-          if (_) subscribeApproved(entityFacade, subscriber, lastKnownDataClockOpt)
-          else log.warn("Failed to subscribe on {} due untrusted kind {}{}", entity.id, subscriber.ops.kind, "")
-        )
-      ).getOrElse(Future.unit)
+    facade(entity).map(entityFacade =>
+      entityFacade.requestForApprove(subscriber).map(
+        if (_) subscribeApproved(entityFacade, subscriber, lastKnownDataClockOpt)
+        else log.warn("Failed to subscribe on {} due untrusted kind {}{}", entity.id, subscriber.ops.kind, "")
+      )
+    ).getOrElse(Future.unit)
   }
 
   // TODO: add test
-  def unsubscribe(entity: Entity, subscriber: Entity): Unit = {
+  def unsubscribe(entity: Entity, subscriber: Entity): Future[Unit] = {
     log.debug("Unsubscribe entity {} from relation {}{}", subscriber.id, entity.id, "")
 
     innerStorage.removeSubscriber(entity.id, subscriber)
+
+    Future.unit
   }
 }

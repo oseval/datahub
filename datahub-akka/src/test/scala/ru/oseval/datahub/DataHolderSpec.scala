@@ -36,7 +36,7 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
 
     productHolder ! Ping
     expectMsg(Pong)
-    notifier.expectMsgType[Register[_]]
+    notifier.expectMsgType[Register]
 
     productHolder ! GetDifferenceFrom(product.id, product.ops.zero.clock)
     expectMsgType[ProductData] shouldEqual product.ops.zero
@@ -57,7 +57,7 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
 
     productHolder ! Ping
     expectMsg(Pong)
-    notifier.expectMsgType[Register[_]]
+    notifier.expectMsgType[Register]
 
     val productData = ProductData("Product name", 1, System.currentTimeMillis)
     productHolder ! UpdateData(productData)
@@ -71,7 +71,7 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
     val warehouse = WarehouseEntity("1")
     val warehouseHolder = system.actorOf(warehouseProps(warehouse.warehouseId, notifier.ref))
 
-    notifier.expectMsgType[Register[_]]
+    notifier.expectMsgType[Register]
 
     warehouseHolder ! GetDifferenceFrom(warehouse.id, WarehouseOps.zero.clock)
     expectMsgType[ALOData[String]] shouldEqual WarehouseOps.zero.copy(previousClock = WarehouseOps.zero.clock)

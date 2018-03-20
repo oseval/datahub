@@ -32,7 +32,7 @@ private[datahub] object AkkaDatahub {
   case class DataUpdated(entity: Entity, data: Data) extends DatahubCommand {
     val entityId: String = entity.id
   }
-  private case class SyncRelation(entity: Entity, subscriberId: String, clock: Any) {
+  private case class SyncRelation(entity: Entity, subscriber: Entity, clock: Any) {
     val entityId: String = entity.id
   }
 
@@ -56,18 +56,9 @@ private[datahub] object AkkaDatahub {
                             (implicit system: ActorSystem, ec: ExecutionContext)
     extends AsyncDatahub(storage)(ec) {
 
-//    private lazy val region = ClusterSharding(system).shardRegion(shardingName)
-
     override def sendChangeToOne(entity: Entity, subscriber: Entity)
                                 (entityData: entity.ops.D): Option[Future[Unit]] =
-      super.sendChangeToOne(entity, subscriber)(entityData).orElse {
-        None
-      }
-
-    // TODO: move it to AsyncDatahub
-    def facade(entity: Entity): Option[EntityFacade] = innerStorage.facade(entity.id).orElse(
-      entity.ops.createFacadeFromEntityId(entity.id)
-    )
+      super.sendChangeToOne(entity, subscriber)(entityData)
   }
 
   private[datahub] def props(storage: Storage) = Props(classOf[AkkaDatahubActor], storage)
@@ -86,14 +77,12 @@ private[datahub] object AkkaDatahub {
         // subscribers is present now
         // TODO: drop asInstanceOf
         localDatahub.notifySubscribers(entity, Set.empty)(data.asInstanceOf[entity.ops.D])
-      case RelationDataUpdated(entityId, entityKind, relationAndData) =>
+      case RelationDataUpdated(entity, relationAndData) =>
         // it is possible that entity is not registered yet
         // TODO:
-        localDatahub.sendChangeToOne(relationAndData.entity, entityId, entityKind)(relationAndData.data)
-      case SyncRelations(entity, subscriberId, clock) =>
-
-        // TODO: take inner storage
-        localDatahub.syncData(innerStorage.facade(entityId), subscriberId, subscriberKind, lastKnownClocks)
+        localDatahub.sendChangeToOne(relationAndData.entity, entity)(relationAndData.data)
+      case SyncRelation(entity, subscriber, clock) =>
+        localDatahub.syncRelationClocks(subscriber, Map(entity -> clock))
     }
   }
 }
@@ -120,34 +109,34 @@ case class AkkaDatahub(storage: Storage)
   }
 
   override def subscribe(entity: Entity,
-                         subscriberId: String,
-                         subscriberKind: String,
-                         lastKnownDataClockOpt: Option[Any]): Unit = {
-    log.debug("subscribe {}, {}, {}", subscriberId, entity.id, entity)
+                         subscriber: Entity,
+                         lastKnownDataClockOpt: Option[Any]): Future[Unit] = {
+    log.debug("subscribe {}, {}, {}", subscriber.id, entity.id, entity)
 
-    region ! Subscribe(entity, subscriberId, subscriberKind, lastKnownDataClockOpt)
+    region ! Subscribe(entity, subscriber, lastKnownDataClockOpt)
+
+    Future.unit
   }
 
-  override protected def unsubscribe(entity: Entity, subscriberId: String, subscriberKind: String): Unit =
-    region ! Unsubscribe(entity, subscriberId, subscriberKind)
+  override def unsubscribe(entity: Entity, subscriber: Entity): Future[Unit] = {
+    region ! Unsubscribe(entity, subscriber)
+    Future.unit
+  }
 
-  protected def notifySubscribers(entity: Entity, forcedSubscribers: Set[Entity])(data: entity.ops.D): Unit = {
-    // TODO: force subscribers could be not registered yet - need store them for future purposes (add to inner storage)
-    // TODO: !!!but it must be done on the shard entity side!!!
-    forcedSubscribers.foreach(e => sendChangeToOne(entity, e.id, e.kind)(data))
+  override def notifySubscribers(entity: Entity, forcedSubscribers: Set[EntityFacade])(data: entity.ops.D): Unit = {
+    forcedSubscribers.foreach(_.onUpdate(entity.id, data))
 
     region ! DataUpdated(entity, data)
   }
 
-  override def sendChangeToOne(entity: Entity, subscriberId: String, subscriberKind: String)
+  override def sendChangeToOne(entity: Entity, subscriber: Entity)
                               (entityData: entity.ops.D): Option[Future[Unit]] =
-    super.sendChangeToOne(entity, subscriberId, subscriberKind)(entityData).orElse {
-      region ! RelationDataUpdated(subscriberId, subscriberKind, RelationAndData(entity)(entityData))
+    super.sendChangeToOne(entity, subscriber)(entityData).orElse {
+      region ! RelationDataUpdated(subscriber, RelationAndData(entity)(entityData))
 
       None
     }
 
-  override def syncRelationClocks(entityId: String, relationClocks: Map[Entity, Any]): Future[Unit] = {
-    relationClocks.foreach { case (relation, clock) => region ! SyncRelation(relation, entityId, clock) }
-  }
+  override def syncRelationClocks(entity: Entity, relationClocks: Map[Entity, Any]): Unit =
+    relationClocks.foreach { case (relation, clock) => region ! SyncRelation(relation, entity, clock) }
 }

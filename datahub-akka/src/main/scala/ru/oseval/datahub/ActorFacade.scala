@@ -25,9 +25,9 @@ case class ActorFacade(entity: Entity,
   override def onUpdate(relatedId: String, relatedData: Data)(implicit timeout: FiniteDuration): Future[Unit] =
     holder.ask(RelatedDataUpdated(entity.id, relatedId, relatedData))(timeout).mapTo[Unit]
 
-  override def requestForApprove(relationId: String, kind: String)(implicit timeout: FiniteDuration): Future[Boolean] =
-    if (entity.untrustedKinds contains kind)
-      holder.ask(RequestForApprove(entity.id, relationId))(timeout).mapTo[Boolean]
+  override def requestForApprove(relation: Entity)(implicit timeout: FiniteDuration): Future[Boolean] =
+    if (entity.untrustedKinds contains relation.ops.kind)
+      holder.ask(RequestForApprove(entity.id, relation.id))(timeout).mapTo[Boolean]
     else Future.successful(true)
 }
 

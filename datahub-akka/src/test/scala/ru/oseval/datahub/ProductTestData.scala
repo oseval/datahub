@@ -18,13 +18,13 @@ object ActorProductTestData {
   case object Pong
   case class UpdateData(data: ProductData)
 
-  private class ProductActor(productId: Int, protected val notifier: ActorRef)
+  private class ProductActor(productId: Int, protected val datahub: Datahub[Future])
     extends Actor with ActorLogging with ActorDataMethods[Future] {
     import context.dispatcher
     private implicit val timeout: Timeout = 3.seconds
     private val product = ProductEntity(productId)
     protected val storage = new LocalDataStorage(
-      LoggerFactory.getLogger("product"), ActorFacade(_, self), notifier.ask(_).mapTo[Unit]
+      LoggerFactory.getLogger("product"), ActorFacade(_, self), datahub
     )
 
     storage.addEntity(product)(product.ops.zero)

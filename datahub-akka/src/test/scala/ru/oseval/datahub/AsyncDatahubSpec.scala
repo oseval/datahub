@@ -29,7 +29,7 @@ class AsyncDatahubSpec extends TestKit(ActorSystem("notifierTest"))
 
   private implicit val timeout: Timeout = 15.seconds
 
-  def datahub = AkkaDatahub(new MemoryStorage)(system, ex)
+  def datahub = AkkaDatahub(new MemoryStorage)(system, system.dispatcher)
 
   behavior of "Notifier"
 
