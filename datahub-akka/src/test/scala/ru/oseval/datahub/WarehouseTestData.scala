@@ -2,7 +2,6 @@ package ru.oseval.datahub
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import ru.oseval.datahub.ProductTestData._
-import akka.pattern.ask
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
 import ru.oseval.datahub.ActorProductTestData.{Ping, Pong}
@@ -13,8 +12,8 @@ import scala.concurrent.duration._
 object ActorWarehouseTestData {
   import WarehouseTestData._
 
-  def warehouseProps(warehouseId: WarehouseId, notifier: ActorRef): Props =
-    Props(classOf[WarehouseDataHolder], warehouseId, notifier)
+  def warehouseProps(warehouseId: WarehouseId, datahub: Datahub[Future]): Props =
+    Props(classOf[WarehouseDataHolder], warehouseId, datahub)
 
   case object GetProducts
   case class AddProduct(id: ProductId)

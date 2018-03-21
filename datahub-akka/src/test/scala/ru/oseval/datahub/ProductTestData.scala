@@ -11,8 +11,8 @@ import scala.concurrent.duration._
 object ActorProductTestData {
   import ProductTestData._
 
-  def productProps(productId: Int, notifier: ActorRef): Props =
-    Props(classOf[ProductActor], productId, notifier)
+  def productProps(productId: Int, datahub: Datahub[Future]): Props =
+    Props(classOf[ProductActor], productId, datahub)
 
   case object Ping
   case object Pong
@@ -30,7 +30,9 @@ object ActorProductTestData {
     storage.addEntity(product)(product.ops.zero)
 
     override def receive: Receive = handleDataMessage(product) orElse {
-      case Ping => sender() ! Pong
+      case Ping =>
+        println(("PPP", sender()))
+        sender() ! Pong
       case UpdateData(updated) =>
         storage.updateEntity(product)(_ => _ => updated) pipeTo sender()
     }

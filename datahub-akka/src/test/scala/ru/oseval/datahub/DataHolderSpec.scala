@@ -7,11 +7,17 @@ import org.scalatest.{BeforeAndAfterAll, FlatSpecLike}
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import ru.oseval.datahub.AkkaDatahub.{DataUpdated, Register}
 import ActorFacadeMessages._
+import org.mockito.Matchers._
+import org.mockito.Mockito._
+import org.scalatest.mockito.MockitoSugar
 import ru.oseval.datahub.data.ALOData
+
+import scala.concurrent.Future
 
 class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
   with ImplicitSender
   with FlatSpecLike
+  with MockitoSugar
   with BeforeAndAfterAll
   with ScalaFutures
   with scalatest.Matchers
@@ -26,26 +32,26 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
     TestKit.shutdownActorSystem(system)
   }
 
-  private val notifier = TestProbe("notifier")
+  private val datahub = spy(new AkkaDatahub(new MemoryStorage)(system, system.dispatcher))
 
   behavior of "Data holder"
 
   it should "response on get difference from id" in {
     val product = ProductEntity(1)
-    val productHolder = system.actorOf(productProps(product.productId, notifier.ref))
+    val productHolder = system.actorOf(productProps(product.productId, datahub))
 
     productHolder ! Ping
     expectMsg(Pong)
-    notifier.expectMsgType[Register]
+    verify(datahub).register(any())(any(), any(), any())
 
     productHolder ! GetDifferenceFrom(product.id, product.ops.zero.clock)
     expectMsgType[ProductData] shouldEqual product.ops.zero
 
     val newProductData = ProductData("Product name", 1, System.currentTimeMillis)
     productHolder ! UpdateData(newProductData)
-    notifier.expectMsgType[DataUpdated].data shouldEqual newProductData
-    notifier.lastSender ! ()
     expectMsgType[Unit]
+    verify(datahub).dataUpdated(product, Set.empty)(newProductData)
+    reset(datahub)
 
     productHolder ! GetDifferenceFrom(product.id, product.ops.zero.clock)
     expectMsgType[ProductData] shouldEqual newProductData
@@ -53,37 +59,36 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
 
   it should "send data update to notifier" in {
     val product = ProductEntity(2)
-    val productHolder = system.actorOf(productProps(product.productId, notifier.ref))
+    val productHolder = system.actorOf(productProps(product.productId, datahub))
 
     productHolder ! Ping
     expectMsg(Pong)
-    notifier.expectMsgType[Register]
+    verify(datahub).register(any())(any(), Map.empty, Set.empty)
 
     val productData = ProductData("Product name", 1, System.currentTimeMillis)
     productHolder ! UpdateData(productData)
-    val msg = notifier.expectMsgType[DataUpdated]
-    msg.entityId shouldBe product.id
-    msg.data.clock shouldBe productData.clock
+    verify(datahub).dataUpdated(product, Set.empty)(productData)
+    reset(datahub)
   }
 
   it should "update related data" in {
     val product = ProductEntity(3)
     val warehouse = WarehouseEntity("1")
-    val warehouseHolder = system.actorOf(warehouseProps(warehouse.warehouseId, notifier.ref))
+    val warehouseHolder = system.actorOf(warehouseProps(warehouse.warehouseId, datahub))
 
-    notifier.expectMsgType[Register]
+    verify(datahub).register(any())(any(), Map.empty, Set.empty)
 
     warehouseHolder ! GetDifferenceFrom(warehouse.id, WarehouseOps.zero.clock)
     expectMsgType[ALOData[String]] shouldEqual WarehouseOps.zero.copy(previousClock = WarehouseOps.zero.clock)
 
     warehouseHolder ! AddProduct(product.productId)
-    notifier.expectMsgType[DataUpdated]
-    warehouseHolder ! ()
+    verify(datahub).dataUpdated(warehouse, Set.empty)(any())
 
     warehouseHolder ! GetDifferenceFrom(warehouse.id, WarehouseOps.zero.clock)
     expectMsgType[ALOData[String]].elements should contain(product.id)
 
     val productData = ProductData("Product name", 1, System.currentTimeMillis)
+
     warehouseHolder ! RelatedDataUpdated(warehouse.id, product.id, productData)
     expectMsgType[Unit]
   }
