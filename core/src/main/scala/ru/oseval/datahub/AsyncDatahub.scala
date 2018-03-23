@@ -112,6 +112,7 @@ class AsyncDatahub(_storage: Storage)
 
   def notifySubscribers(entity: Entity, forcedSubscribers: Set[EntityFacade])(data: entity.ops.D): Unit = {
     forcedSubscribers.foreach(f => sendChangeToOne(entity, f.entity)(data))
+    println(("SSSS", entity, innerStorage.getSubscribers(entity.id), data))
     innerStorage.getSubscribers(entity.id).foreach(sendChangeToOne(entity, _)(data))
   }
 
@@ -127,8 +128,8 @@ class AsyncDatahub(_storage: Storage)
     facade(subscriber).map(_.onUpdate(entity.id, entityData))
 
   protected def syncData(entityFacade: EntityFacade,
-                       subscriber: Entity,
-                       lastKnownDataClockOpt: Option[Any]): Unit = {
+                         subscriber: Entity,
+                         lastKnownDataClockOpt: Option[Any]): Unit = {
     log.debug(
       "Subscribe entity {} on {} with last known relation clock {}",
       subscriber.id, entityFacade.entity.id, lastKnownDataClockOpt
@@ -154,16 +155,19 @@ class AsyncDatahub(_storage: Storage)
   def subscribe(entity: Entity, // this must be entity to get ops and compare clocks
                 subscriber: Entity,
                 lastKnownDataClockOpt: Option[Any]): Future[Unit] = {
-    log.debug("subscribe {}, {}, {}", subscriber, entity.id, innerStorage.facade(entity.id))
+    log.debug("subscribe {}, {}, {}", subscriber, entity.id, facade(entity))
 
     // we must subscribe it, otherways subscriber will not receive any changes from entity while it is not registered
     // TODO: we need to compare stored and lastKnown clocks and force entity start only if it need it
-    facade(entity).map(entityFacade =>
+    println(("AAAAA", entity, facade(entity)))
+    facade(entity).map { entityFacade =>
+      println(("FACADE", entityFacade.entity, entityFacade))
+
       entityFacade.requestForApprove(subscriber).map(
         if (_) subscribeApproved(entityFacade, subscriber, lastKnownDataClockOpt)
         else log.warn("Failed to subscribe on {} due untrusted kind {}{}", entity.id, subscriber.ops.kind, "")
       )
-    ).getOrElse(Future.unit)
+    }.getOrElse(Future.unit)
   }
 
   // TODO: add test

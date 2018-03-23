@@ -1,6 +1,7 @@
 package ru.oseval.datahub
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import akka.pattern.pipe
 import ru.oseval.datahub.ProductTestData._
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
@@ -20,6 +21,8 @@ object ActorWarehouseTestData {
 
   class WarehouseDataHolder(warehouseId: WarehouseId, protected val datahub: Datahub[Future])
     extends ActorDataMethods[Future] with Actor with ActorLogging {
+
+    import context.dispatcher
     private implicit val timeout: Timeout = 3.seconds
 
     private val warehouse = WarehouseEntity(warehouseId)
@@ -36,7 +39,7 @@ object ActorWarehouseTestData {
       case AddProduct(productId) =>
         val product = ProductEntity(productId)
         storage.addRelation(product)
-        storage.updateEntity(warehouse)(int => _.updated(productId, int.cur))
+        storage.updateEntity(warehouse)(int => _.updated(productId, int.cur)) pipeTo sender()
     }
   }
 }

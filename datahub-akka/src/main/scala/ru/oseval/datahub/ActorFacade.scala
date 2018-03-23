@@ -25,10 +25,13 @@ case class ActorFacade(entity: Entity,
   override def onUpdate(relatedId: String, relatedData: Data)(implicit timeout: FiniteDuration): Future[Unit] =
     holder.ask(RelatedDataUpdated(entity.id, relatedId, relatedData))(timeout).mapTo[Unit]
 
-  override def requestForApprove(relation: Entity)(implicit timeout: FiniteDuration): Future[Boolean] =
-    if (entity.untrustedKinds contains relation.ops.kind)
-      holder.ask(RequestForApprove(entity.id, relation.id))(timeout).mapTo[Boolean]
-    else Future.successful(true)
+  override def requestForApprove(subscriber: Entity)(implicit timeout: FiniteDuration): Future[Boolean] = {
+    println(("ZZZZZ", subscriber, entity))
+    if (entity.untrustedKinds contains subscriber.ops.kind) {
+      println(("ASK HOLDER", holder, entity))
+      holder.ask(RequestForApprove(entity.id, subscriber.id))(timeout).mapTo[Boolean]
+    } else Future.successful(true)
+  }
 }
 
 trait ActorDataMethods[M[_]] { this: Actor =>

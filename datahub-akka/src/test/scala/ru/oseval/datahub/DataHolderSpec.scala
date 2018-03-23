@@ -7,7 +7,7 @@ import org.scalatest.{BeforeAndAfterAll, FlatSpecLike}
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import ru.oseval.datahub.AkkaDatahub.{DataUpdated, Register}
 import ActorFacadeMessages._
-import org.mockito.Matchers._
+import org.mockito.{Matchers, Mockito}
 import org.mockito.Mockito._
 import org.scalatest.mockito.MockitoSugar
 import ru.oseval.datahub.data.ALOData
@@ -27,6 +27,9 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
   import ActorProductTestData._
   import WarehouseTestData._
   import ActorWarehouseTestData._
+  import org.mockito.Matchers._
+
+  private def eqq[T] = Matchers.eq[T](_)
 
   override def afterAll {
     TestKit.shutdownActorSystem(system)
@@ -63,10 +66,11 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
 
     productHolder ! Ping
     expectMsg(Pong)
-    verify(datahub).register(any())(any(), Map.empty, Set.empty)
+    verify(datahub).register(any())(any(), eqq(Map.empty), eqq(Set.empty))
 
     val productData = ProductData("Product name", 1, System.currentTimeMillis)
     productHolder ! UpdateData(productData)
+    expectMsgType[Unit]
     verify(datahub).dataUpdated(product, Set.empty)(productData)
     reset(datahub)
   }
@@ -76,16 +80,17 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
     val warehouse = WarehouseEntity("1")
     val warehouseHolder = system.actorOf(warehouseProps(warehouse.warehouseId, datahub))
 
-    verify(datahub).register(any())(any(), Map.empty, Set.empty)
+    verify(datahub, Mockito.timeout(3000)).register(any())(any(), eqq(Map.empty), eqq(Set.empty))
 
     warehouseHolder ! GetDifferenceFrom(warehouse.id, WarehouseOps.zero.clock)
     expectMsgType[ALOData[String]] shouldEqual WarehouseOps.zero.copy(previousClock = WarehouseOps.zero.clock)
 
     warehouseHolder ! AddProduct(product.productId)
-    verify(datahub).dataUpdated(warehouse, Set.empty)(any())
+    expectMsgType[Unit]
+    verify(datahub).dataUpdated(eqq(warehouse), eqq(Set.empty))(any())
 
     warehouseHolder ! GetDifferenceFrom(warehouse.id, WarehouseOps.zero.clock)
-    expectMsgType[ALOData[String]].elements should contain(product.id)
+    expectMsgType[ALOData[String]].elements should contain(product.productId)
 
     val productData = ProductData("Product name", 1, System.currentTimeMillis)
 

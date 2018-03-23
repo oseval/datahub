@@ -1,6 +1,7 @@
 package ru.oseval.datahub
 
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
+import akka.cluster.Cluster
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import ru.oseval.datahub.AsyncDatahub.Storage
 import ru.oseval.datahub.data.Data
@@ -37,17 +38,23 @@ private[datahub] object AkkaDatahub {
   }
 
   // sharding
-  val shardingName = "Entities"
+  val shardingName = "Entitiesooo"
 
   private val extractEntityId: ShardRegion.ExtractEntityId = {
-    case c: DatahubCommand => (c.entityId, c)
+    case c: DatahubCommand =>
+      println(("EEEEEE", c))
+      (c.entityId, c)
   }
 
   private val numberOfShards = 100
 
   private val extractShardId: ShardRegion.ExtractShardId = {
-    case c: DatahubCommand ⇒ (c.entityId.## % numberOfShards).toString
+    case c: DatahubCommand ⇒
+      println(("CCCC", c))
+      (c.entityId.## % numberOfShards).toString
     case ShardRegion.StartEntity(id) => // TODO: ???
+
+      println(("RRRRR", id))
       // StartEntity is used by remembering entities feature
       (id.toLong % numberOfShards).toString
   }
@@ -56,9 +63,14 @@ private[datahub] object AkkaDatahub {
                             (implicit system: ActorSystem, ec: ExecutionContext)
     extends AsyncDatahub(storage)(ec) {
 
+    val region = ClusterSharding(system).shardRegion(shardingName)
+
     override def sendChangeToOne(entity: Entity, subscriber: Entity)
                                 (entityData: entity.ops.D): Option[Future[Unit]] =
-      super.sendChangeToOne(entity, subscriber)(entityData)
+      super.sendChangeToOne(entity, subscriber)(entityData).orElse {
+        region ! RelationDataUpdated(subscriber, RelationAndData(entity)(entityData))
+        None
+      }
   }
 
   private[datahub] def props(storage: Storage) = Props(classOf[AkkaDatahubActor], storage)
@@ -67,16 +79,18 @@ private[datahub] object AkkaDatahub {
     private val localDatahub = new LocalDatahub(storage)(context.system, context.dispatcher)
     override def receive: Receive = {
       case Register(facade) =>
+        println(("REGREGF", facade.entity))
         // TODO: just for adding facade to inner storage (take it explicitly?)
         localDatahub.register(facade)(facade.entity.ops.zero.clock, Map.empty, Set.empty)
       case Subscribe(entity, subscriber, lastKnownDataClockOpt) =>
+        println(("SUBSUB", entity, subscriber))
         localDatahub.subscribe(entity, subscriber, lastKnownDataClockOpt)
       case Unsubscribe(entity, subscriber) =>
         localDatahub.unsubscribe(entity, subscriber)
       case DataUpdated(entity, data) =>
         // subscribers is present now
         // TODO: drop asInstanceOf
-        localDatahub.notifySubscribers(entity, Set.empty)(data.asInstanceOf[entity.ops.D])
+        localDatahub.dataUpdated(entity, Set.empty)(data.asInstanceOf[entity.ops.D])
       case RelationDataUpdated(entity, relationAndData) =>
         // it is possible that entity is not registered yet
         // TODO:
@@ -93,7 +107,7 @@ case class AkkaDatahub(storage: Storage)
 
   import AkkaDatahub._
 
-  private lazy val region: ActorRef = ClusterSharding(system).start(
+  private val region: ActorRef = ClusterSharding(system).start(
     typeName = AkkaDatahub.shardingName,
     entityProps = props(storage),
     settings = ClusterShardingSettings(system),
@@ -104,6 +118,7 @@ case class AkkaDatahub(storage: Storage)
                        (lastClock: facade.entity.ops.D#C,
                         relationClocks: Map[Entity, Any],
                         forcedSubscribers: Set[EntityFacade]): Future[Unit] = {
+    println(("NNNNN", facade.entity))
     region ! Register(facade)
     super.register(facade)(lastClock, relationClocks, forcedSubscribers)
   }

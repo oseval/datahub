@@ -26,12 +26,15 @@ lazy val root = (project in file(".")).aggregate(core, datahubAkka, examples, da
 
 lazy val core = (project in file("core")).settings(commonSettings)
 
+val akkaV = "2.5.11"
+
 lazy val datahubAkka = (project in file("datahub-akka"))
   .dependsOn(core)
   .settings(commonSettings)
   .settings(libraryDependencies ++= Seq(
-    "com.typesafe.akka" %% "akka-cluster-sharding" % "2.5.10",
-    "com.typesafe.akka" %% "akka-testkit" % "2.5.10" % "test"
+    "com.typesafe.akka" %% "akka-cluster-sharding" % akkaV,
+    "com.typesafe.akka" %% "akka-distributed-data" % akkaV,
+    "com.typesafe.akka" %% "akka-testkit" % akkaV % "test"
   ))
 
 lazy val examples = (project in file("examples"))
