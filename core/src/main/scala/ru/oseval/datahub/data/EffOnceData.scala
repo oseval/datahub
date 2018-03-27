@@ -4,6 +4,8 @@ object EffOnceData {
   def nextClock(current: Long) = System.currentTimeMillis max (current + 1L)
 }
 
+
+// TODO: inherit from cumulative data
 abstract class EffOnceDataOps[A](val getRelations: A => Set[String] = (_: A) => Set.empty) extends DataOps {
   type D = EffOnceData[A]
   override val ordering = Ordering.Long

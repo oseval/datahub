@@ -7,12 +7,12 @@ object WarehouseTestData {
   type WarehouseId = String
 
   object WarehouseOps extends ALODataOps[Int](pid => (Set(ProductEntity(pid)), Set.empty), _ => Set.empty) {
+    override val kind: String = "warehouse"
     override def createFacadeFromEntityId(entityId: String): Option[EntityFacade] = None
   }
 
   case class WarehouseEntity(warehouseId: WarehouseId) extends Entity {
-    val kind: String = "warehouse"
-    lazy val id: String = kind + "_" + warehouseId
+    lazy val id: String = WarehouseOps.kind + "_" + warehouseId
     val ops = WarehouseOps
     override val untrustedKinds: Set[String] = Set(ProductTestData.ProductOps.kind)
   }

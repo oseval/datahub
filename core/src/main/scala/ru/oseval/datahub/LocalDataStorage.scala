@@ -24,7 +24,7 @@ class LocalDataStorage[M[_]](log: Logger,
       _data
     }
 
-    // TODO: return abstract shared facade?
+    // TODO: return abstract shared facade? One facade for all subscribers.
     val forcedSubscribers = entity.ops getForcedSubscribers data
 
     val relationClocks = entity.ops.getRelations(data)._1 // for any entity data must be total

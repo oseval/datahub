@@ -9,7 +9,9 @@ object ACIDataOps {
 
 abstract class ACIDataOps[A](relations: A => (Set[Entity], Set[Entity]) =
                              (_: A) => (Set.empty[Entity], Set.empty[Entity]),
-                             forcedSubscribers: A => Set[EntityFacade] = (_: A) => Set.empty) extends DataOps {
+                             forcedSubscribers: A => Set[EntityFacade] = (_: A) => Set.empty[EntityFacade])
+  extends DataOps {
+
   override type D = ACIData[A]
   override val ordering: Ordering[Long] = Ordering.Long
   override val zero: D = ACIData()

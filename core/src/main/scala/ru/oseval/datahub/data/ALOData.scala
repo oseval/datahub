@@ -4,6 +4,8 @@ import ru.oseval.datahub.{Entity, EntityFacade}
 
 import scala.collection.SortedMap
 
+
+// TODO: Actually is CumulativeData, ALOData is trait with clock and prevClock
 abstract class ALODataOps[A](relations: A => (Set[Entity], Set[Entity]) =
                              (_: A) => (Set.empty, Set.empty),
                              forcedSubscribers: A => Set[EntityFacade] = (_: A) => Set.empty) extends DataOps {
