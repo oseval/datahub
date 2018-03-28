@@ -10,7 +10,7 @@ import ActorFacadeMessages._
 import org.mockito.{Matchers, Mockito}
 import org.mockito.Mockito._
 import org.scalatest.mockito.MockitoSugar
-import ru.oseval.datahub.data.ALOData
+import ru.oseval.datahub.data.CumulativeData
 
 import scala.concurrent.Future
 
@@ -83,14 +83,14 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
     verify(datahub, Mockito.timeout(3000)).register(any())(any(), eqq(Map.empty), eqq(Set.empty))
 
     warehouseHolder ! GetDifferenceFrom(warehouse.id, WarehouseOps.zero.clock)
-    expectMsgType[ALOData[String]] shouldEqual WarehouseOps.zero.copy(previousClock = WarehouseOps.zero.clock)
+    expectMsgType[CumulativeData[String]] shouldEqual WarehouseOps.zero.copy(previousClock = WarehouseOps.zero.clock)
 
     warehouseHolder ! AddProduct(product.productId)
     expectMsgType[Unit]
     verify(datahub).dataUpdated(eqq(warehouse), eqq(Set.empty))(any())
 
     warehouseHolder ! GetDifferenceFrom(warehouse.id, WarehouseOps.zero.clock)
-    expectMsgType[ALOData[String]].elements should contain(product.productId)
+    expectMsgType[CumulativeData[String]].elements should contain(product.productId)
 
     val productData = ProductData("Product name", 1, System.currentTimeMillis)
 

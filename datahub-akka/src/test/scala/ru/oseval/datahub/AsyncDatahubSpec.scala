@@ -14,7 +14,7 @@ import ActorFacadeMessages._
 import akka.cluster.Cluster
 import org.mockito.Matchers._
 import org.mockito.{Matchers, Mockito}
-import ru.oseval.datahub.data.{ALOData, ClockInt}
+import ru.oseval.datahub.data.{CumulativeData, ClockInt}
 
 class AsyncDatahubSpec extends TestKit(ActorSystem("notifierTest"))
   with ImplicitSender
@@ -64,7 +64,7 @@ class AsyncDatahubSpec extends TestKit(ActorSystem("notifierTest"))
     val warehouseHolderProbe = TestProbe("warehouseHolder")
     val warehouse = WarehouseEntity("Warehouse1")
     val warehouseFacade = ActorFacade(warehouse, warehouseHolderProbe.ref)
-    val warehouseData = ALOData(product.id)(ClockInt(System.currentTimeMillis, 0L))
+    val warehouseData = CumulativeData(product.id)(ClockInt(System.currentTimeMillis, 0L))
 
     // Register product
     hub.register(productFacade)(productData.clock, Map.empty, Set.empty).futureValue
@@ -103,7 +103,7 @@ class AsyncDatahubSpec extends TestKit(ActorSystem("notifierTest"))
 
     // cache of product data
     val warehouseHolderProbe = TestProbe("warehouseHolder")
-    val warehouseData = ALOData(product.id)(ClockInt(System.currentTimeMillis, 0L))
+    val warehouseData = CumulativeData(product.id)(ClockInt(System.currentTimeMillis, 0L))
     val warehouseFacade = ActorFacade(WarehouseEntity("Warehouse1"), warehouseHolderProbe.ref)
 
     // Register product

@@ -2,11 +2,15 @@ package ru.oseval.datahub.data
 
 import ru.oseval.datahub.{Entity, EntityFacade}
 
+/**
+  * Data which are associative and idempotent
+  */
 object ACIDataOps {
   def nextClock(current: Long): Long =
     System.currentTimeMillis max (current + 1L)
 }
 
+// TODO: actually this should be Replaceable Ops
 abstract class ACIDataOps[A](relations: A => (Set[Entity], Set[Entity]) =
                              (_: A) => (Set.empty[Entity], Set.empty[Entity]),
                              forcedSubscribers: A => Set[EntityFacade] = (_: A) => Set.empty[EntityFacade])
@@ -16,11 +20,9 @@ abstract class ACIDataOps[A](relations: A => (Set[Entity], Set[Entity]) =
   override val ordering: Ordering[Long] = Ordering.Long
   override val zero: D = ACIData()
 
-  override def combine(a: D, b: D): D =
-    if (a.clock > b.clock) a else b
+  override def combine(a: D, b: D): D
 
-  override def diffFromClock(a: D, from: Long): D =
-    if (a.clock > from) a else zero
+  override def diffFromClock(a: D, from: Long): D
 
   override def getRelations(data: D): (Set[Entity], Set[Entity]) =
     data.data.map(relations) getOrElse (Set.empty, Set.empty)

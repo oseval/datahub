@@ -74,7 +74,7 @@ abstract class DataOps {
   def approveRelation(data: D, relationId: String): Boolean = true
 
   // TODO: Entity Ops
-  def createFacadeFromEntityId(entityId: String): Option[EntityFacade]
+  def createFacadeFromEntityId(entityId: String): Option[EntityFacade] = None
 }
 
 case class ClockInt[C](cur: C, prev: C)
