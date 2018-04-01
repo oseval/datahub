@@ -45,7 +45,8 @@ abstract class DataOps {
     * @param b
     * @return
     */
-  def combine(a: D, b: D): D
+  def combine(a: D, b: D): D =
+    if (ordering.gt(a.clock, b.clock)) a else b
 
   /**
     * Computes diff between `a` and older state with a `from` id
@@ -53,7 +54,8 @@ abstract class DataOps {
     * @param from
     * @return
     */
-  def diffFromClock(a: D, from: D#C): D
+  def diffFromClock(a: D, from: D#C): D =
+    if (ordering.gt(a.clock, from)) a else zero
 
   def nextClock(current: D#C): D#C
 

@@ -1,8 +1,8 @@
 package ru.oseval.datahub
 
-import ru.oseval.datahub.data.ACIDataOps;
+import ru.oseval.datahub.data.AIDataOps;
 
-public class UserOps extends ACIDataOps<User> {
+public class UserOps extends AIDataOps<User> {
     public static class User {
         private int userId;
         private String name;

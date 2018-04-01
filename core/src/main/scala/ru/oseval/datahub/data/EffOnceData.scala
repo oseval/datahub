@@ -5,7 +5,7 @@ object EffOnceData {
 }
 
 
-// TODO: inherit from cumulative data
+// TODO: inherit from alodata data
 abstract class EffOnceDataOps[A](val getRelations: A => Set[String] = (_: A) => Set.empty) extends DataOps {
   type D = EffOnceData[A]
   override val ordering = Ordering.Long
@@ -59,6 +59,7 @@ abstract class EffOnceDataOps[A](val getRelations: A => Set[String] = (_: A) => 
   }
 }
 
+// TODO: inherit from alodata
 case class EffOnceData[A](data: Map[Long, A] = Map.empty[Long, A],
                           clock: Long = 0L,
                           previousClock: Long = 0L

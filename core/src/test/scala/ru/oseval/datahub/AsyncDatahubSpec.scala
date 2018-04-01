@@ -10,7 +10,7 @@ import ProductTestData._
 import WarehouseTestData._
 import org.scalatest.mockito.MockitoSugar
 import ru.oseval.datahub
-import ru.oseval.datahub.data.{CumulativeData, ClockInt}
+import ru.oseval.datahub.data.{ALOData, ClockInt}
 
 import scala.concurrent.Future
 
@@ -50,7 +50,7 @@ class AsyncDatahubSpec extends FlatSpecLike
     val warehouseFacade = mock[EntityFacade { val entity: warehouse.type }]
     when(warehouseFacade.entity).thenReturn(warehouse)
     val knownClocks = System.currentTimeMillis
-    val warehouseData = CumulativeData(product.id)(ClockInt(knownClocks, 0L))
+    val warehouseData = ALOData(product.id)(ClockInt(knownClocks, 0L))
 
     // Register product
     datahub.register(productFacade)(productData.clock, Map.empty, Set.empty).futureValue
@@ -84,7 +84,7 @@ class AsyncDatahubSpec extends FlatSpecLike
 
     // cache of product data
     val warehouse = WarehouseEntity("Warehouse1")
-    val warehouseData = CumulativeData(product.id)(ClockInt(System.currentTimeMillis, 0L))
+    val warehouseData = ALOData(product.id)(ClockInt(System.currentTimeMillis, 0L))
     val warehouseFacade = mock[EntityFacade { val entity: warehouse.type }]
     when(warehouseFacade.entity).thenReturn(warehouse)
 
@@ -154,7 +154,7 @@ class AsyncDatahubSpec extends FlatSpecLike
     // cache of product data
     val warehouse = WarehouseEntity("5")
     val warehouseFacade = mock[EntityFacade { val entity: warehouse.type }]
-    val warehouseData = CumulativeData(product.id)(ClockInt(System.currentTimeMillis, 0L))
+    val warehouseData = ALOData(product.id)(ClockInt(System.currentTimeMillis, 0L))
     when(warehouseFacade.entity).thenReturn(warehouse)
 
     // Register product
