@@ -80,3 +80,15 @@ abstract class DataOps {
 }
 
 case class ClockInt[C](cur: C, prev: C)
+
+
+
+//       ai     alo    eff
+//
+//a                    +      prevId
+//
+//c      +      +      +      order
+//
+//i      +      +      +      id
+
+

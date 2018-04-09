@@ -88,6 +88,8 @@ class LocalDataStorage[M[_]](log: Logger,
 
       datas.update(entity.id, updatedData)
 
+      // TODO: how to recover if subscription will fail?
+      // store subscription results and use circuit breaker when it fail
       addedRelations.foreach(datahub.subscribe(_, entity, None))
       removedRelations.foreach(datahub.unsubscribe(_, entity))
       datahub.dataUpdated(entity, forcedSubscribers)(dataUpdate)

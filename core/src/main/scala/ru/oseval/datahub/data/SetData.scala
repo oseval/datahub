@@ -2,6 +2,9 @@ package ru.oseval.datahub.data
 
 import scala.collection.SortedMap
 
+/**
+  * Data to help operating with collections inside not associative Data.
+  */
 object SetDataOps {
   def zero[A, C](implicit clockInt: ClockInt[C], ordering: Ordering[C]) =
     SetData[A, C](clockInt.cur, clockInt.prev)(SortedMap.empty, SortedMap.empty, None)

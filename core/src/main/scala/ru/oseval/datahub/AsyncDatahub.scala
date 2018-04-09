@@ -25,36 +25,26 @@ object AsyncDatahub {
   }
 
   private[datahub] class MemoryInnerStorage /*extends InnerDataStorage */{
-    protected val trieSetEmpty: TrieMap[Entity, Boolean] = TrieMap.empty[Entity, Boolean]
-
+    private val trieSetEmpty: TrieMap[Entity, Boolean] = TrieMap.empty[Entity, Boolean]
     private val facades: TrieMap[String, EntityFacade] =
       TrieMap.empty[String, EntityFacade]
     private val subscribers: TrieMap[String, TrieMap[Entity, Boolean]] =
       TrieMap.empty[String, TrieMap[Entity, Boolean]] // facade -> subscribers
-//    protected val relations: TrieMap[String, TrieMap[String, Boolean]] =
-//      TrieMap.empty[String, TrieMap[String, Boolean]] // facade -> relations
 
     def facade(entityId: String): Option[EntityFacade] = facades.get(entityId)
     def registerFacade(entityFacade: EntityFacade): Unit = facades.put(entityFacade.entity.id, entityFacade)
 
     def getSubscribers(entityId: String): Set[Entity] =
       subscribers.get(entityId).map(_.keySet.toSet[Entity]) getOrElse Set.empty[Entity]
-//    override def getRelations(entityId: String): Set[String] =
-//      relations.get(entityId).map(_.keySet.toSet[String]) getOrElse Set.empty[String]
 
     def addSubscriber(entityId: String, subscriber: Entity): Unit = {
       subscribers.putIfAbsent(entityId, trieSetEmpty)
       subscribers(entityId).update(subscriber, true)
 
-//      relations.putIfAbsent(entityId, trieSetEmpty)
-//      relations(entityId).update(subscriberId, true)
     }
     def removeSubscriber(entityId: String, subscriber: Entity): Unit = {
       subscribers.get(entityId).foreach(_ -= subscriber)
       subscribers.remove(entityId, trieSetEmpty)
-
-//      relations.get(entityId).foreach(_ -= relationId)
-//      relations.remove(entityId, trieSetEmpty)
     }
   }
 }
@@ -157,7 +147,6 @@ class AsyncDatahub(_storage: Storage)
                 lastKnownDataClockOpt: Option[Any]): Future[Unit] = {
     log.debug("subscribe {}, {}, {}", subscriber, entity.id, facade(entity))
 
-    // we must subscribe it, otherways subscriber will not receive any changes from entity while it is not registered
     // TODO: we need to compare stored and lastKnown clocks and force entity start only if it need it
     println(("AAAAA", entity, facade(entity)))
     facade(entity).map { entityFacade =>
@@ -167,7 +156,11 @@ class AsyncDatahub(_storage: Storage)
         if (_) subscribeApproved(entityFacade, subscriber, lastKnownDataClockOpt)
         else log.warn("Failed to subscribe on {} due untrusted kind {}{}", entity.id, subscriber.ops.kind, "")
       )
-    }.getOrElse(Future.unit)
+    }.getOrElse {
+      // we must subscribe it, otherway subscriber will not receive any changes from entity when it will be registered
+      innerStorage.addSubscriber(entity.id, subscriber)
+      Future.unit
+    }
   }
 
   // TODO: add test

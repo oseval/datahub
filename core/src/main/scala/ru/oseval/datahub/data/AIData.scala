@@ -11,7 +11,8 @@ object AIDataOps {
 }
 
 /**
-  * An A must be associative. This data is not at-least-once, therefore each update must contain all data.
+  * An A must be associative. If it is not, then you have to use EffOnceData.
+  * This data is not at-least-once, therefore each update must contain all data.
   * @param relations
   * @param forcedSubscribers
   * @tparam A
