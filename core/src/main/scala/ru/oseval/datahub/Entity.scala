@@ -23,7 +23,7 @@ trait EntityFacade {
     * @param dataClock
     * @return
     */
-  def getUpdatesFrom(dataClock: entity.ops.D#C)(implicit timeout: FiniteDuration): Future[entity.ops.D]
+  def getUpdatesFrom(dataClock: entity.ops.D#C): Future[entity.ops.D]
 
   /**
     * Receives updates of related external data
@@ -31,12 +31,19 @@ trait EntityFacade {
     * @param relatedData
     * @return
     */
-  def onUpdate(relatedId: String, relatedData: Data)(implicit timeout: FiniteDuration): Future[Unit]
+  def onUpdate(relatedId: String, relatedData: Data): Future[Unit]
 
   /**
     * When an entity is not trust to the relation kind then a subscription must approved
     * @param relation
     * @return
     */
-  def requestForApprove(relation: Entity)(implicit timeout: FiniteDuration): Future[Boolean]
+  def requestForApprove(relation: Entity): Future[Boolean]
+
+  /**
+    * Do call when entity subscribed on a relation
+    * @param relation
+    * @return
+    */
+  def onSubscribe(relation: Entity): Future[Unit]
 }

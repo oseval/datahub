@@ -142,6 +142,7 @@ class AsyncDatahub(_storage: Storage)
     })
   }
 
+  // TODO: ADD SUBSCRIBED ON TO FACADE!!!
   def subscribe(entity: Entity, // this must be entity to get ops and compare clocks
                 subscriber: Entity,
                 lastKnownDataClockOpt: Option[Any]): Future[Unit] = {

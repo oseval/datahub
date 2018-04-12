@@ -3,6 +3,7 @@ package ru.oseval.datahub
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
 import akka.cluster.Cluster
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
+import akka.pattern.{ask, pipe}
 import ru.oseval.datahub.AsyncDatahub.Storage
 import ru.oseval.datahub.data.Data
 
@@ -84,7 +85,7 @@ private[datahub] object AkkaDatahub {
         localDatahub.register(facade)(facade.entity.ops.zero.clock, Map.empty, Set.empty)
       case Subscribe(entity, subscriber, lastKnownDataClockOpt) =>
         println(("SUBSUB", entity, subscriber))
-        localDatahub.subscribe(entity, subscriber, lastKnownDataClockOpt)
+        localDatahub.subscribe(entity, subscriber, lastKnownDataClockOpt) pipeTo sender()
       case Unsubscribe(entity, subscriber) =>
         localDatahub.unsubscribe(entity, subscriber)
       case DataUpdated(entity, data) =>
@@ -123,14 +124,13 @@ case class AkkaDatahub(storage: Storage)
     super.register(facade)(lastClock, relationClocks, forcedSubscribers)
   }
 
+  // TODO: pending subscriptions
   override def subscribe(entity: Entity,
                          subscriber: Entity,
                          lastKnownDataClockOpt: Option[Any]): Future[Unit] = {
     log.debug("subscribe {}, {}, {}", subscriber.id, entity.id, entity)
 
-    region ! Subscribe(entity, subscriber, lastKnownDataClockOpt)
-
-    Future.unit
+    (region ? Subscribe(entity, subscriber, lastKnownDataClockOpt)).mapTo[Unit]
   }
 
   override def unsubscribe(entity: Entity, subscriber: Entity): Future[Unit] = {

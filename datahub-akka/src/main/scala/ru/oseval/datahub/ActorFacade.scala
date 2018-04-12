@@ -12,26 +12,30 @@ object ActorFacadeMessages {
   private[datahub] case class GetDifferenceFrom(entity: String, dataClock: Any) extends FacadeMessage
   private[datahub] case class RelatedDataUpdated(toEntityId: String, relatedId: String, data: Data) extends FacadeMessage
   private[datahub] case class RequestForApprove(entityId: String, relationId: String) extends FacadeMessage
+  private[datahub] case class OnSubscribe(relationId: String) extends FacadeMessage
 }
 import ActorFacadeMessages._
 
 case class ActorFacade(entity: Entity,
                        holder: ActorRef,
                        untrustedKinds: Set[String] = Set.empty[String]
-                      ) extends EntityFacade {
-  override def getUpdatesFrom(dataClock: entity.ops.D#C)(implicit timeout: FiniteDuration): Future[entity.ops.D] =
-    holder.ask(GetDifferenceFrom(entity.id, dataClock))(timeout).asInstanceOf[Future[entity.ops.D]]
+                      )(implicit timeout: FiniteDuration) extends EntityFacade {
+  override def getUpdatesFrom(dataClock: entity.ops.D#C): Future[entity.ops.D] =
+    holder.ask(GetDifferenceFrom(entity.id, dataClock)).asInstanceOf[Future[entity.ops.D]]
 
-  override def onUpdate(relatedId: String, relatedData: Data)(implicit timeout: FiniteDuration): Future[Unit] =
-    holder.ask(RelatedDataUpdated(entity.id, relatedId, relatedData))(timeout).mapTo[Unit]
+  override def onUpdate(relatedId: String, relatedData: Data): Future[Unit] =
+    holder.ask(RelatedDataUpdated(entity.id, relatedId, relatedData)).mapTo[Unit]
 
-  override def requestForApprove(subscriber: Entity)(implicit timeout: FiniteDuration): Future[Boolean] = {
+  override def requestForApprove(subscriber: Entity): Future[Boolean] = {
     println(("ZZZZZ", subscriber, entity))
     if (entity.untrustedKinds contains subscriber.ops.kind) {
       println(("ASK HOLDER", holder, entity))
-      holder.ask(RequestForApprove(entity.id, subscriber.id))(timeout).mapTo[Boolean]
+      holder.ask(RequestForApprove(entity.id, subscriber.id)).mapTo[Boolean]
     } else Future.successful(true)
   }
+
+  override def onSubscribe(relation: Entity): Future[Unit] =
+    holder.ask(OnSubscribe(relation.id)).mapTo[Unit]
 }
 
 trait ActorDataMethods[M[_]] { this: Actor =>
@@ -47,5 +51,8 @@ trait ActorDataMethods[M[_]] { this: Actor =>
 
     case RequestForApprove(id, relationId) if id == entity.id =>
       sender() ! storage.approveRelation(entity, relationId)
+
+    case OnSubscribe(relationId) =>
+      sender() ! storage.
   }
 }
