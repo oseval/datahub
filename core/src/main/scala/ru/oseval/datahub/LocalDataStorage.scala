@@ -9,17 +9,11 @@ import scala.reflect.ClassTag
 class LocalDataStorage[M[_]](log: Logger,
                              createFacade: Entity => EntityFacade,
                              datahub: Datahub[M],
-                             knownData: Map[Entity, Data] = Map.empty,
-                             pendingTimeout: Long = 30000L) {
+                             knownData: Map[Entity, Data] = Map.empty) {
   private val entities = mutable.Map[String, Entity](knownData.keys.map(e => e.id -> e).toSeq: _*)
   private val relations = mutable.Set.empty[String]
   private var notSolidRelations = Map.empty[Entity, Any]
   private val datas = mutable.Map(knownData.map { case (e, v) => e.id -> v }.toSeq: _*)
-
-  // entity -> relation -> timestamp
-  private val pendingSubscriptions = mutable.Map.empty[Entity, mutable.Map[Entity, Long]]
-  // timestamp -> (entity, relation)
-  private val pendingSubscriptionsByTime = mutable.TreeMap.empty[Long, (Entity, Entity)]
 
   private def createFacadeDep(e: Entity) = createFacade(e).asInstanceOf[EntityFacade { val entity: e.type }]
 
@@ -36,8 +30,6 @@ class LocalDataStorage[M[_]](log: Logger,
     val relationClocks = entity.ops.getRelations(data)._1 // for any entity data must be total
       .flatMap(relation => datas.get(relation.id).map(d => relation -> d.clock)).toMap
 
-    val curtime = System.currentTimeMillis
-    relationClocks.foreach(r => pendingSubscriptions.update(r._1, curtime))
     // send current clock to avoid unnecessary update sending (from zero to current)
     datahub.register(createFacadeDep(entity))(data.clock, relationClocks, forcedSubscribers)
   }
@@ -83,26 +75,6 @@ class LocalDataStorage[M[_]](log: Logger,
       update
     }
 
-  private def subscribe(relation: Entity, subscriber: Entity): Unit = {
-    val curtime = System.currentTimeMillis
-    val relationsAndClocks = pendingSubscriptions.getOrElseUpdate(subscriber, mutable.Map.empty[Entity, Long])
-    relationsAndClocks.update(relation, curtime)
-    pendingSubscriptionsByTime.update(curtime, subscriber -> relation)
-    datahub.subscribe(relation, subscriber, None)
-  }
-  private def removePendingSubscription(relation: Entity, subscriber: Entity): Unit =
-    pendingSubscriptions.get(subscriber).foreach { relationsAndClocks =>
-      relationsAndClocks.get(relation).foreach(pendingSubscriptionsByTime -= _)
-      relationsAndClocks -= relation
-      if (relationsAndClocks.isEmpty) pendingSubscriptions -= subscriber
-    }
-  private def unsubscribe(relation: Entity, subscriber: Entity): Unit = {
-    removePendingSubscription(relation, subscriber)
-    datahub.unsubscribe(relation, subscriber)
-  }
-  def onSubscribe(relation: Entity, subscriber: Entity): Unit =
-    removePendingSubscription(relation, subscriber)
-
   private def applyEntityUpdate(entity: Entity)
                                (curData: entity.ops.D,
                                 dataUpdate: entity.ops.D,
@@ -117,8 +89,8 @@ class LocalDataStorage[M[_]](log: Logger,
 
       datas.update(entity.id, updatedData)
 
-      addedRelations.foreach(subscribe(_, entity)(None))
-      removedRelations.foreach(unsubscribe(_, entity))
+      addedRelations.foreach(datahub.subscribe(_, entity, None))
+      removedRelations.foreach(datahub.unsubscribe(_, entity))
       datahub.dataUpdated(entity, forcedSubscribers)(dataUpdate)
     } else addEntity(entity)(updatedData)
 
@@ -180,13 +152,6 @@ class LocalDataStorage[M[_]](log: Logger,
     if (notSolidRelations.nonEmpty) (entities -- relations).headOption.foreach { case (_, e) =>
       datahub.syncRelationClocks(e, notSolidRelations)
     }
-
-    val curtime = System.currentTimeMillis
-    val pendings = pendingSubscriptionsByTime.keys.takeWhile(t => (curtime - t) >= pendingTimeout)
-    pendings.foreach(pendingSubscriptionsByTime.get(_).foreach { case (subscriber, relation) =>
-      removePendingSubscription(relation, subscriber)
-      subscribe(relation, subscriber)
-    })
 
     notSolidRelations.isEmpty
   }

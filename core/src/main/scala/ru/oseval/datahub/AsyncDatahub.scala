@@ -50,7 +50,7 @@ object AsyncDatahub {
 }
 import AsyncDatahub._
 
-class AsyncDatahub(_storage: Storage)
+class AsyncDatahub(_storage: Storage, repeater: Repeater)
                   (implicit val ec: ExecutionContext) extends Datahub[Future] {
   private val storage = new MemoryFallbackStorage(_storage)(ec)
   protected val innerStorage = new MemoryInnerStorage
@@ -69,36 +69,43 @@ class AsyncDatahub(_storage: Storage)
     innerStorage.registerFacade(facade)
 
     // this facade depends on that relations
-    relationClocks.foreach { case (e, clock) => subscribe(e, facade.entity, Some(clock)) }
+    val subscribeOnRelations = Future.traverse(relationClocks) { case (e, clock) =>
+      subscribe(e, facade.entity, Some(clock))
+    }
 
     // TODO: request facade to approve all subscribers
 
-
     // sync registered entity clock
-    storage.getLastClock(facade.entity).flatMap { lastStoredClockOpt =>
-      val fops: facade.entity.ops.type = facade.entity.ops
+    val syncFacade = repeater.run(() =>
+      storage.getLastClock(facade.entity).flatMap { lastStoredClockOpt =>
+        val fops: facade.entity.ops.type = facade.entity.ops
 
-      lastStoredClockOpt.flatMap(fops.matchClock).map(lastStoredClock =>
-        if (fops.ordering.gt(lastClock, lastStoredClock))
-          facade.getUpdatesFrom(lastStoredClock).flatMap(
-            dataUpdated(facade.entity, forcedSubscribers)
-          )
-        else Future.unit
-      ).getOrElse(storage.increase(facade.entity)(lastClock))
-    }
+        lastStoredClockOpt.flatMap(fops.matchClock).map(lastStoredClock =>
+          if (fops.ordering.gt(lastClock, lastStoredClock))
+            facade.getUpdatesFrom(lastStoredClock).flatMap(
+              dataUpdated(facade.entity, forcedSubscribers)
+            )
+          else Future.unit
+        ).getOrElse(storage.increase(facade.entity)(lastClock))
+      }
+    )
+
+    subscribeOnRelations.flatMap(_ => syncFacade)
   }
 
   def dataUpdated(entity: Entity, forcedSubscribers: Set[EntityFacade])(data: entity.ops.D): Future[Unit] =
-    storage.increase(entity)(data.clock).map(_ =>
+    repeater.run(() => storage.increase(entity)(data.clock)).map(_ =>
       notifySubscribers(entity, forcedSubscribers)(data)
     )
 
-  def syncRelationClocks(entity: Entity, relationClocks: Map[Entity, Any]): Unit =
-    relationClocks.foreach { case (relation, clock) =>
-      innerStorage.facade(relation.id)
-        .orElse(relation.ops.createFacadeFromEntityId(relation.id))
-        .foreach(syncData(_, entity, Some(clock)))
-    }
+  def syncRelationClocks(entity: Entity, relationClocks: Map[Entity, Any]): Future[Unit]=
+    Future.traverse(
+      relationClocks.flatMap { case (relation, clock) =>
+        facade(relation).map(_ -> clock)
+      }
+    ) { case (relationFacade, clock) =>
+      syncData(relationFacade, entity, Some(clock))
+    }.map(_ => ())
 
   def notifySubscribers(entity: Entity, forcedSubscribers: Set[EntityFacade])(data: entity.ops.D): Unit = {
     forcedSubscribers.foreach(f => sendChangeToOne(entity, f.entity)(data))
@@ -119,7 +126,7 @@ class AsyncDatahub(_storage: Storage)
 
   protected def syncData(entityFacade: EntityFacade,
                          subscriber: Entity,
-                         lastKnownDataClockOpt: Option[Any]): Unit = {
+                         lastKnownDataClockOpt: Option[Any]): Future[Unit] = {
     log.debug(
       "Subscribe entity {} on {} with last known relation clock {}",
       subscriber.id, entityFacade.entity.id, lastKnownDataClockOpt
@@ -127,19 +134,22 @@ class AsyncDatahub(_storage: Storage)
 
     val entityOps: entityFacade.entity.ops.type = entityFacade.entity.ops
 
-    storage.getLastClock(entityFacade.entity).foreach(_.flatMap(entityOps.matchClock).foreach { lastClock =>
+    repeater.run(() => storage.getLastClock(entityFacade.entity))
+      .flatMap(_.flatMap(entityOps.matchClock).map { lastClock =>
 
-      val lastKnownDataClock = lastKnownDataClockOpt.flatMap(entityOps.matchClock) getOrElse entityOps.zero.clock
+        val lastKnownDataClock = lastKnownDataClockOpt.flatMap(entityOps.matchClock) getOrElse entityOps.zero.clock
 
-      log.debug("lastClock {}, lastKnownClock {}, {}",
-        Seq(lastClock, lastKnownDataClock, entityOps.ordering.gt(lastClock, lastKnownDataClock))
-      )
-
-      if (entityOps.ordering.gt(lastClock, lastKnownDataClock))
-        entityFacade.getUpdatesFrom(lastKnownDataClock).foreach(d =>
-          sendChangeToOne(entityFacade.entity, subscriber)(d)
+        log.debug("lastClock {}, lastKnownClock {}, {}",
+          Seq(lastClock, lastKnownDataClock, entityOps.ordering.gt(lastClock, lastKnownDataClock))
         )
-    })
+
+        if (entityOps.ordering.gt(lastClock, lastKnownDataClock))
+          repeater.run(() => entityFacade.getUpdatesFrom(lastKnownDataClock).flatMap(d =>
+            sendChangeToOne(entityFacade.entity, subscriber)(d) getOrElse Future.unit
+          ))
+        else
+          Future.unit
+      } getOrElse Future.unit)
   }
 
   // TODO: ADD SUBSCRIBED ON TO FACADE!!!
@@ -153,9 +163,11 @@ class AsyncDatahub(_storage: Storage)
     facade(entity).map { entityFacade =>
       println(("FACADE", entityFacade.entity, entityFacade))
 
-      entityFacade.requestForApprove(subscriber).map(
-        if (_) subscribeApproved(entityFacade, subscriber, lastKnownDataClockOpt)
-        else log.warn("Failed to subscribe on {} due untrusted kind {}{}", entity.id, subscriber.ops.kind, "")
+      repeater.run(() =>
+        entityFacade.requestForApprove(subscriber).map(
+          if (_) subscribeApproved(entityFacade, subscriber, lastKnownDataClockOpt)
+          else log.warn("Failed to subscribe on {} due untrusted kind {}{}", entity.id, subscriber.ops.kind, "")
+        )
       )
     }.getOrElse {
       // we must subscribe it, otherway subscriber will not receive any changes from entity when it will be registered
