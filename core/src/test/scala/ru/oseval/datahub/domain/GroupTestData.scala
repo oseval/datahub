@@ -10,7 +10,7 @@ case class Group(groupId: String,
                  members: SetData[Long, Long],
                  messages: SetData[GroupMessage, Long])
 
-object GroupOps extends ALODataOps[Group]
+object GroupOps extends ALODataOps[Group]()
 
 case class GroupEntity(groupId: String) extends Entity {
   lazy val id: String = "group_" + groupId

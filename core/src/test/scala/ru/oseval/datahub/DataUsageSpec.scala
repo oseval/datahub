@@ -20,13 +20,14 @@ class DataUsageSpec extends FlatSpecLike
   with MockitoSugar
   with ScalaFutures
   with scalatest.Matchers
-  with Eventually {
+  with Eventually
+  with CommonTestMethods {
 
   // to simulate network errors
-  val flawedDatahub = new AsyncDatahub {
+  val flawedDatahub = new AsyncDatahub(new MemoryStorage, repeater) {
     private def withFlaw(f: () => Future[Unit]): Future[Unit] =
       if (Random.nextInt % 2 == 1) Future.failed(new Exception("Datahub call was flawed"))
-      else f(())
+      else f()
     override def register(facade: EntityFacade)
                          (lastClock: facade.entity.ops.D#C,
                           relationClocks: Map[Entity, Any],

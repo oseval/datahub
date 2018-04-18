@@ -10,8 +10,10 @@ import scala.collection.SortedMap
   * @param forcedSubscribers
   * @tparam A
   */
-abstract class ALODataOps[A](relations: A => (Set[Entity], Set[Entity]) = (_: A) => (Set.empty, Set.empty),
-                             forcedSubscribers: A => Set[EntityFacade] = (_: A) => Set.empty
+abstract class ALODataOps[A](relations: A => (Set[Entity], Set[Entity]) =
+                                (_: A) => (Set.empty[Entity], Set.empty[Entity]),
+                             forcedSubscribers: A => Set[EntityFacade] =
+                                (_: A) => Set.empty[EntityFacade]
                             ) extends DataOps {
   type D = ALOData[A]
   override val ordering: Ordering.Long.type = Ordering.Long

@@ -1,5 +1,7 @@
 package ru.oseval.datahub
 
+import java.util.concurrent.{Callable, ScheduledThreadPoolExecutor, ThreadPoolExecutor, TimeUnit}
+
 import org.scalatest
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike}
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
@@ -9,6 +11,7 @@ import scala.concurrent.duration._
 import ProductTestData._
 import WarehouseTestData._
 import org.scalatest.mockito.MockitoSugar
+import org.slf4j.LoggerFactory
 import ru.oseval.datahub
 import ru.oseval.datahub.data.{ALOData, ClockInt}
 
@@ -19,12 +22,10 @@ class AsyncDatahubSpec extends FlatSpecLike
   with MockitoSugar
   with ScalaFutures
   with scalatest.Matchers
-  with Eventually {
+  with Eventually
+  with CommonTestMethods {
 
-  private val ec = scala.concurrent.ExecutionContext.global
-  private implicit val timeout = 3.seconds
-
-  def createDatahub = new AsyncDatahub(new MemoryStorage)(ec)
+  def createDatahub = new AsyncDatahub(new MemoryStorage, repeater)(ec)
 
   behavior of "Datahub"
 
