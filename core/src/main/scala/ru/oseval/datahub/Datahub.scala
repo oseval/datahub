@@ -10,5 +10,5 @@ trait Datahub[M[_]] {
                 lastKnownDataClockOpt: Option[Any]): M[Unit]
   def unsubscribe(entity: Entity, subscriber: Entity): M[Unit]
   def dataUpdated(entity: Entity, forcedSubscribers: Set[EntityFacade])(data: entity.ops.D): M[Unit]
-  def syncRelationClocks(entity: Entity, relationClocks: Map[Entity, Any]): M[Unit]
+  def syncRelationClocks(entity: Entity, relationClocks: Map[Entity, Any]): Unit
 }

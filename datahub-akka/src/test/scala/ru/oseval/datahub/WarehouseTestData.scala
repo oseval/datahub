@@ -23,7 +23,7 @@ object ActorWarehouseTestData {
     extends ActorDataMethods[Future] with Actor with ActorLogging {
 
     import context.dispatcher
-    private implicit val timeout: Timeout = 3.seconds
+    private implicit val timeout = 3.seconds
 
     private val warehouse = WarehouseEntity(warehouseId)
     protected val storage = new LocalDataStorage(

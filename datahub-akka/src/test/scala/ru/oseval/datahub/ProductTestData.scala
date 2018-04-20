@@ -21,7 +21,7 @@ object ActorProductTestData {
   private class ProductActor(productId: Int, protected val datahub: Datahub[Future])
     extends Actor with ActorLogging with ActorDataMethods[Future] {
     import context.dispatcher
-    private implicit val timeout: Timeout = 3.seconds
+    private implicit val timeout = 3.seconds
     private val product = ProductEntity(productId)
     protected val storage = new LocalDataStorage(
       LoggerFactory.getLogger("product"), ActorFacade(_, self), datahub

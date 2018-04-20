@@ -55,7 +55,6 @@ class AsyncDatahub(_storage: Storage, repeater: Repeater)
   private val storage = new MemoryFallbackStorage(_storage)(ec)
   protected val innerStorage = new MemoryInnerStorage
   protected val log = LoggerFactory.getLogger(getClass)
-  protected implicit val timeout: FiniteDuration = 3.seconds
 
   // TODO: perhaps this is not expected
   def facade(entity: Entity): Option[EntityFacade] = innerStorage.facade(entity.id).orElse(
@@ -98,14 +97,10 @@ class AsyncDatahub(_storage: Storage, repeater: Repeater)
       notifySubscribers(entity, forcedSubscribers)(data)
     )
 
-  def syncRelationClocks(entity: Entity, relationClocks: Map[Entity, Any]): Future[Unit]=
-    Future.traverse(
-      relationClocks.flatMap { case (relation, clock) =>
-        facade(relation).map(_ -> clock)
-      }
-    ) { case (relationFacade, clock) =>
-      syncData(relationFacade, entity, Some(clock))
-    }.map(_ => ())
+  def syncRelationClocks(entity: Entity, relationClocks: Map[Entity, Any]): Unit =
+    relationClocks.foreach { case (relation, clock) =>
+      facade(relation).foreach(syncData(_, entity, Some(clock)))
+    }
 
   def notifySubscribers(entity: Entity, forcedSubscribers: Set[EntityFacade])(data: entity.ops.D): Unit = {
     forcedSubscribers.foreach(f => sendChangeToOne(entity, f.entity)(data))

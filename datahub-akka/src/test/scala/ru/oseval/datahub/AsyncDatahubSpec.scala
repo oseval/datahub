@@ -22,7 +22,8 @@ class AsyncDatahubSpec extends TestKit(ActorSystem("notifierTest"))
   with BeforeAndAfterAll
   with ScalaFutures
   with scalatest.Matchers
-  with Eventually {
+  with Eventually
+  with CommonTestMethods {
 
   import Mockito._
 
@@ -36,24 +37,18 @@ class AsyncDatahubSpec extends TestKit(ActorSystem("notifierTest"))
     TestKit.shutdownActorSystem(system)
   }
 
-  private implicit val timeout: Timeout = 15.seconds
-
-  def datahub = AkkaDatahub(new MemoryStorage)(system, system.dispatcher)
-
   behavior of "Notifier"
-
-  private implicit val ec = system.dispatcher
 
   it should "register data entities" in {
     val holderProbe = TestProbe("holder")
-    val hub = datahub
+    val hub = createDatahub
 
     val facade = ActorFacade(ProductEntity(1), holderProbe.ref)
     hub.register(facade)(facade.entity.ops.zero.clock, Map.empty, Set.empty).futureValue
   }
 
   it should "subscribe on related data entities" in {
-    val hub = datahub
+    val hub = createDatahub
 
     val productHolderProbe = TestProbe("productHolder")
     val product = ProductEntity(2)
@@ -80,8 +75,8 @@ class AsyncDatahubSpec extends TestKit(ActorSystem("notifierTest"))
       Set.empty
     )
 
-    verify(productFacade, Mockito.timeout(timeout.duration.toMillis))
-      .requestForApprove(Matchers.eq(warehouse))(any())
+    verify(productFacade, Mockito.timeout(timeout.toMillis))
+      .requestForApprove(warehouse)
 
     productHolderProbe.expectMsgType[GetDifferenceFrom].dataClock shouldEqual productData.clock
     productHolderProbe.lastSender ! newProductData
@@ -94,7 +89,7 @@ class AsyncDatahubSpec extends TestKit(ActorSystem("notifierTest"))
   }
 
   it should "receive updates from related entities" in {
-    val hub = datahub
+    val hub = createDatahub
 
     val productHolderProbe = TestProbe("productHolder")
     val product = ProductEntity(3)

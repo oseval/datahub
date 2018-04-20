@@ -18,4 +18,5 @@ trait CommonTestMethods {
       override def run(): Unit = f()
     }, delay, TimeUnit.MILLISECONDS)
   protected val repeater = Repeater("TestRepeater", RepeaterConfig(500, 5000), scheduleOnce, log)
+  def createDatahub = new AsyncDatahub(new MemoryStorage, repeater)(ec)
 }

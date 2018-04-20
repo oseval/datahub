@@ -25,8 +25,6 @@ class AsyncDatahubSpec extends FlatSpecLike
   with Eventually
   with CommonTestMethods {
 
-  def createDatahub = new AsyncDatahub(new MemoryStorage, repeater)(ec)
-
   behavior of "Datahub"
 
   it should "register data entities" in {

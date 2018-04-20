@@ -39,11 +39,4 @@ trait EntityFacade {
     * @return
     */
   def requestForApprove(relation: Entity): Future[Boolean]
-
-  /**
-    * Do call when entity subscribed on a relation
-    * @param relation
-    * @return
-    */
-  def onSubscribe(relation: Entity): Future[Unit]
 }

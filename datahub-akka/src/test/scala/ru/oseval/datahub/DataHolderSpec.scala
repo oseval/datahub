@@ -21,7 +21,8 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
   with BeforeAndAfterAll
   with ScalaFutures
   with scalatest.Matchers
-  with Eventually {
+  with Eventually
+  with CommonTestMethods {
 
   import ProductTestData._
   import ActorProductTestData._
@@ -35,7 +36,7 @@ class DataHolderSpec extends TestKit(ActorSystem("holderTest"))
     TestKit.shutdownActorSystem(system)
   }
 
-  private val datahub = spy(new AkkaDatahub(new MemoryStorage)(system, system.dispatcher))
+  private val datahub = spy(new AkkaDatahub(new MemoryStorage, repeater)(system, system.dispatcher))
 
   behavior of "Data holder"
 
