@@ -13,6 +13,11 @@ trait Entity {
     * Kinds of subscribers that can't be subscribed without explicitly checking by producer
     */
   val untrustedKinds: Set[String] = Set.empty
+
+  /**
+    * Helper to upcast self to Entity
+    */
+  lazy val lift: Entity = this
 }
 
 trait EntityFacade {

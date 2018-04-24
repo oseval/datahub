@@ -3,7 +3,7 @@ package ru.oseval.datahub.data
 import scala.collection.SortedMap
 
 /**
-  * Data to help operating with collections inside not associative Data.
+  * Data to help operating with collections inside at-least-once and eff-once Data.
   */
 object SetDataOps {
   def zero[A, C](implicit clockInt: ClockInt[C], ordering: Ordering[C]) =
