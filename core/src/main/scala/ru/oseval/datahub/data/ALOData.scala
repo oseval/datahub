@@ -5,35 +5,48 @@ import ru.oseval.datahub.{Entity, EntityFacade}
 import scala.collection.SortedMap
 
 /**
-  * An A must be associative. If it is not, then you have to use EffOnceData.
-  * @param relations
-  * @param forcedSubscribers
+  * This wrapper intended to add the at-least-one delivery control ability to data.
+  * Useful in case of compound data where each pieces are ACID data and have a lot of such pieces
+  * replicated separately. For example sequence of updates of some big data.
+  * An A must be associative and idempotent.
+  *
+  * @param ops ops for wrapping
   * @tparam A
   */
-abstract class ALODataOps[A](relations: A => (Set[Entity], Set[Entity]) =
-                                (_: A) => (Set.empty[Entity], Set.empty[Entity]),
-                             forcedSubscribers: A => Set[EntityFacade] =
-                                (_: A) => Set.empty[EntityFacade]
-                            ) extends DataOps {
+abstract class ALODataOps[A <: Data, AO <: DataOps](ops: AO)
+                                                   (implicit ev1: A =:= ops.D,
+                                                    ev2: ops.D =:= A,
+                                                    evC: A#C =:= ops.D#C) extends DataOps {
   type D = ALOData[A]
-  override val ordering: Ordering.Long.type = Ordering.Long
-  override val zero: ALOData[A] = ALOData[A]()
+  override val ordering = Ordering.by(evC)(ops.ordering)
+  private val zeroA: A = ev2(ops.zero)
+  override val zero: ALOData[A] = ALOData(None, zeroA.clock, zeroA.clock, None)
 
   override def getRelations(data: D): (Set[Entity], Set[Entity]) =
-    data.data.values.foldLeft((Set.empty[Entity], Set.empty[Entity])) { case ((add, rem), d) =>
-      val (a, r) = relations(d)
-      (add ++ a) -> (r ++ rem)
+    data.data match {
+      case Some(d) => ops.getRelations(ev1(d))
+      case None => (Set.empty[Entity], Set.empty[Entity])
     }
-  override def getForcedSubscribers(data: D): Set[EntityFacade] =
-    data.data.values.foldLeft(Set.empty[EntityFacade])((f, d) => f ++ forcedSubscribers(d))
 
-  override def diffFromClock(a: ALOData[A], from: Long): ALOData[A] =
-    ALOData(a.data.filterKeys(_ > from), a.clock, from, a.further)
+  // TODO: can't be true if it a partial data - for local storage only. Restrict access to it.
+  override def diffFromClock(a: ALOData[A], from: A#C): ALOData[A] =
+    if (a.isSolid)
+      ALOData(
+        a.data.map(ops.diffFromClock(_, from)),
+        a.clock,
+        if (ordering.gteq(a.clock, from)) from else a.clock,
+        None
+      )
+    else
+      throw InvalidDataException("Diff can't be done on a partial data")
 
-  override def nextClock(current: Long): Long = ALOData.nextClock(current)
-
+  private def combineData: (Option[A], Option[A]) => Option[A] = {
+    case (Some(f), Some(s)) => Some(ops.combine(f, s))
+    case (Some(f), None) => Some(f)
+    case (None, s) => s
+  }
   override def combine(a: D, b: D): D = {
-    val (first, second) =  if (a.clock > b.clock) (b, a) else (a, b)
+    val (first, second) =  if (ordering.gt(a.clock, b.clock)) (b, a) else (a, b)
 
 //    | --- | |---|
 //
@@ -43,11 +56,11 @@ abstract class ALODataOps[A](relations: A => (Set[Entity], Set[Entity]) =
 //      | --- |
 //    | -------- |
 
-    if (first.clock >= second.previousClock) {
-      if (first.previousClock >= second.previousClock) second
+    if (ordering.gteq(first.clock, second.previousClock)) {
+      if (ordering.gteq(first.previousClock, second.previousClock)) second
       else {
-        val visible = ALOData(
-          data = second.data ++ first.data,
+        val visible = ALOData[A](
+          data = combineData(first.data, second.data),
           second.clock,
           first.previousClock
         )
@@ -63,7 +76,7 @@ abstract class ALODataOps[A](relations: A => (Set[Entity], Set[Entity]) =
       }
     } else // further
       ALOData(
-        second.data ++ first.data,
+        combineData(first.data, second.data),
         first.clock,
         first.previousClock,
         first.further.map(combine(_, second)).orElse(Some(second))
@@ -72,20 +85,17 @@ abstract class ALODataOps[A](relations: A => (Set[Entity], Set[Entity]) =
 }
 
 object ALOData {
-  def apply[A](el: A)(implicit clockInt: ClockInt[Long]): ALOData[A] =
-    ALOData(SortedMap(clockInt.cur -> el), clockInt.cur, clockInt.prev, None)
-  def nextClock(current: Long): Long = System.currentTimeMillis max (current + 1L)
+  def apply[A <: Data](data: A)(implicit clockInt: ClockInt[A#C]): ALOData[A] =
+    ALOData(Some(data), clockInt.cur, clockInt.start)
 }
 
-case class ALOData[A](data: SortedMap[Long, A] = SortedMap.empty[Long, A],
-                      clock: Long = System.currentTimeMillis,
-                      previousClock: Long = 0L,
-                      private[data] val further: Option[ALOData[A]] = None
-                     ) extends AtLeastOnceData {
-  override type C = Long
+case class ALOData[A <: Data](data: Option[A],
+                              clock: A#C,
+                              previousClock: A#C,
+                              private[data] val further: Option[ALOData[A]] = None
+                             ) extends AtLeastOnceData {
+  override type C = A#C
   val isSolid: Boolean = further.isEmpty
-  lazy val elements: Seq[A] = data.values.toList
-  def updated(update: A, newClock: Long): ALOData[A] = {
-    copy(data.updated(newClock, update), newClock, clock, None)
-  }
+  def updated(updated: A, newClock: A#C): ALOData[A] =
+    copy(data = Some(updated), clock = newClock)
 }

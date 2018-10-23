@@ -10,11 +10,6 @@ trait Entity {
   val ops: DataOps
 
   /**
-    * Kinds of subscribers that can't be subscribed without explicitly checking by producer
-    */
-  val untrustedKinds: Set[String] = Set.empty
-
-  /**
     * Helper to upcast self to Entity
     */
   lazy val lift: Entity = this
@@ -37,11 +32,4 @@ trait EntityFacade {
     * @return
     */
   def onUpdate(relatedId: String, relatedData: Data): Future[Unit]
-
-  /**
-    * When an entity is not trust to the relation kind then a subscription must approved
-    * @param relation
-    * @return
-    */
-  def requestForApprove(relation: Entity): Future[Boolean]
 }

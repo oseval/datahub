@@ -1,6 +1,6 @@
 package ru.oseval.datahub.data
 
-import ru.oseval.datahub.{Entity, EntityFacade}
+import ru.oseval.datahub.Entity
 
 /**
   * Data which are associative and idempotent
@@ -11,15 +11,14 @@ object AIDataOps {
 }
 
 /**
-  * An A must be associative. If it is not, then you have to use EffOnceData.
-  * This data is not at-least-once, therefore each update must contain all data.
+  * An A must be associative (could be evaluated in any order).
+  * If it is not, then you have to use EffOnceData.
+  * This data is not at-least-once, therefore each update must contain full data.
   * @param relations
-  * @param forcedSubscribers
   * @tparam A
   */
 abstract class AIDataOps[A](relations: A => (Set[Entity], Set[Entity]) =
-                              (_: A) => (Set.empty[Entity], Set.empty[Entity]),
-                            forcedSubscribers: A => Set[EntityFacade] = (_: A) => Set.empty[EntityFacade])
+                              (_: A) => (Set.empty[Entity], Set.empty[Entity]))
   extends DataOps {
 
   override type D = AIData[A]
@@ -29,14 +28,10 @@ abstract class AIDataOps[A](relations: A => (Set[Entity], Set[Entity]) =
   override def combine(a: D, b: D): D =
     if (a.clock > b.clock) a else b
 
-  override def diffFromClock(a: D, from: Long): D =
-    if (from > a.clock) zero else a
+  override def diffFromClock(a: D, from: Long): D = a
 
   override def getRelations(data: D): (Set[Entity], Set[Entity]) =
     data.data.map(relations) getOrElse (Set.empty, Set.empty)
-
-  override def getForcedSubscribers(data: D): Set[EntityFacade] =
-    data.data.map(forcedSubscribers) getOrElse Set.empty
 
   override def nextClock(current: Long): Long = AIDataOps.nextClock(current)
 }

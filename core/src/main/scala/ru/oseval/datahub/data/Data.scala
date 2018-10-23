@@ -21,14 +21,6 @@ trait AtLeastOnceData extends Data {
   val isSolid: Boolean
 }
 
-/**
-  * If your data is compound from some other datas then you can use this trait to automate data flow
-  */
-trait CompoundData extends AtLeastOnceData {
-  protected val children: Set[Data]
-  override lazy val isSolid: Boolean = children.forall { case d: AtLeastOnceData => d.isSolid case _ => true }
-}
-
 abstract class DataOps {
   type D <: Data
   val kind: String = getClass.getName
@@ -71,16 +63,12 @@ abstract class DataOps {
   // TODO: store as SetData?
   def getRelations(data: D): (Set[Entity], Set[Entity])
 
-  def getForcedSubscribers(data: D): Set[EntityFacade]
-
   def approveRelation(data: D, relationId: String): Boolean = true
-
-  // TODO: Entity Ops
-  def createFacadeFromEntityId(entityId: String): Option[EntityFacade] = None
 }
 
-case class ClockInt[C](cur: C, prev: C)
+case class ClockInt[C](cur: C, start: C)
 
+case class InvalidDataException(message: String) extends RuntimeException(message)
 
 
 //       ai     alo    eff
@@ -90,5 +78,3 @@ case class ClockInt[C](cur: C, prev: C)
 //c      +      +      +      order
 //
 //i      +      +      +      id
-
-

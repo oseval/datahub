@@ -11,32 +11,46 @@ class LocalDataStorage[M[_]](log: Logger,
                              datahub: Datahub[M],
                              knownData: Map[Entity, Data] = Map.empty) {
   private val entities = mutable.Map[String, Entity](knownData.keys.map(e => e.id -> e).toSeq: _*)
-  private val relations = mutable.Set.empty[String]
+  private val relations = mutable.Map.empty[String, mutable.Set[String]] // relation -> entities
+
+  private val pendingSubscriptions = mutable.Set.empty[Entity]  
   private var notSolidRelations = Map.empty[Entity, Any]
   private val datas = mutable.Map(knownData.map { case (e, v) => e.id -> v }.toSeq: _*)
 
   private def createFacadeDep(e: Entity) = createFacade(e).asInstanceOf[EntityFacade { val entity: e.type }]
 
-  def addEntity(entity: Entity)(_data: entity.ops.D): M[Unit] = {
+  private def addRelation(entityId: String, relationId: String): Unit =
+    relations.getOrElseUpdate(relationId, mutable.Set.empty) += entityId
+  private def subscribeOnRelation(entity: Entity, relation: Entity, lastKnownClock: Any) = {
+    addRelation(entity.id, relation.id)
+    if (!datahub.subscribe(relation, entity, Some(lastKnownClock)))
+      pendingSubscriptions += relation
+  }
+  private def removeRelation(entityId: String, relationId: String): Unit =
+    relations.get(relationId).foreach { entityIds =>
+      entityIds -= entityId
+      if (entityIds.isEmpty) {
+        relations -= relationId
+        datas -= relationId
+      }
+    }
+
+  def addEntity(entity: Entity)(_data: entity.ops.D): Unit = {
     entities.update(entity.id, entity)
     val data: entity.ops.D = get(entity).getOrElse {
       datas.update(entity.id, _data)
       _data
     }
 
-    // TODO: return abstract shared facade? One facade for all subscribers.
-    val forcedSubscribers = entity.ops getForcedSubscribers data
-
-    val relationClocks = entity.ops.getRelations(data)._1 // for any entity data must be total
-      .flatMap(relation => datas.get(relation.id).map(d => relation -> d.clock)).toMap
-
     // send current clock to avoid unnecessary update sending (from zero to current)
-    datahub.register(createFacadeDep(entity))(data.clock, relationClocks, forcedSubscribers)
-  }
+    datahub.register(createFacadeDep(entity))
 
-  def addRelation(entity: Entity): Unit = {
-    entities.update(entity.id, entity)
-    relations += entity.id
+    val (addedRelations, removedRelations) = entity.ops.getRelations(data)
+    val entityRelations = addedRelations -- removedRelations
+    entityRelations.foreach { relation =>
+      val clock = datas.get(relation.id).map(_.clock) getOrElse relation.ops.zero.clock
+      subscribeOnRelation(entity, relation, clock)
+    }
   }
 
   def combineRelation(entityId: String, otherData: Data): Data =
@@ -78,20 +92,22 @@ class LocalDataStorage[M[_]](log: Logger,
   private def applyEntityUpdate(entity: Entity)
                                (curData: entity.ops.D,
                                 dataUpdate: entity.ops.D,
-                                updatedData: entity.ops.D) =
+                                updatedData: entity.ops.D): M[Unit] =
     if (entities isDefinedAt entity.id) {
       val (addedRelations, removedRelations) = entity.ops getRelations dataUpdate
-      val forcedSubscribers = entity.ops getForcedSubscribers updatedData
 
-      relations ++= addedRelations.map(_.id)
-      relations --= removedRelations.map(_.id)
-      datas --= removedRelations.map(_.id)
+      addedRelations.foreach { rel =>
+        val relClock = datas.get(rel.id).map(_.clock).getOrElse(rel.ops.zero.clock)
+        subscribeOnRelation(entity, rel, relClock)
+      }
+      removedRelations.foreach { rel =>
+        removeRelation(entity.id, rel.id)
+        datahub.unsubscribe(_, entity)
+      }
 
       datas.update(entity.id, updatedData)
 
-      addedRelations.foreach(datahub.subscribe(_, entity, None))
-      removedRelations.foreach(datahub.unsubscribe(_, entity))
-      datahub.dataUpdated(entity, forcedSubscribers)(dataUpdate)
+      datahub.dataUpdated(entity)(dataUpdate)
     } else addEntity(entity)(updatedData)
 
   def combineEntity(entity: Entity)
@@ -106,14 +122,11 @@ class LocalDataStorage[M[_]](log: Logger,
   def updateEntity(entity: Entity)
                   (upd: ClockInt[entity.ops.D#C] => entity.ops.D => entity.ops.D): M[Unit] = {
     val curData = get(entity).getOrElse(entity.ops.zero)
-    val updatedData = upd(ClockInt(entity.ops.nextClock(curData.clock), curData.clock))(curData)
+    val updatedData = upd(ClockInt(entity.ops.nextClock(curData.clock), entity.ops.zero.clock))(curData)
     val dataUpdate = entity.ops.diffFromClock(updatedData, curData.clock)
 
     applyEntityUpdate(entity)(curData, dataUpdate, updatedData)
   }
-
-  def diffFromUnknownClock(entity: Entity, clock: Any): entity.ops.D =
-    diffFromClock(entity)(entity.ops.matchClock(clock) getOrElse entity.ops.zero.clock)
 
   def diffFromClock(entity: Entity)(clock: entity.ops.D#C): entity.ops.D =
     entity.ops.diffFromClock({
@@ -122,11 +135,6 @@ class LocalDataStorage[M[_]](log: Logger,
         entity.ops.zero
       }
     }, clock)
-
-  def approveRelation(entity: Entity, relationId: String): Boolean =
-    get(entity).exists { data =>
-      entity.ops.approveRelation(data, relationId)
-    }
 
   def get[D <: Data](entityId: String)(implicit tag: ClassTag[D]): Option[D] =
     datas.get(entityId).flatMap(d =>
@@ -149,7 +157,11 @@ class LocalDataStorage[M[_]](log: Logger,
     * @return
     */
   def checkDataIntegrity: Boolean = {
-    if (notSolidRelations.nonEmpty) (entities -- relations).headOption.foreach { case (_, e) =>
+    pendingSubscriptions = pendingSubscriptions.filter { relation =>
+      val relClock = datas.get(relation.id).map(_.clock).getOrElse(relation.ops.zero.clock)
+      datahub.subscribe(relation, )
+    }
+    if (notSolidRelations.nonEmpty) (entities -- relations.keySet).headOption.foreach { case (_, e) =>
       datahub.syncRelationClocks(e, notSolidRelations)
     }
 

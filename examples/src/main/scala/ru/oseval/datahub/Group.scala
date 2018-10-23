@@ -4,9 +4,10 @@ import akka.actor.{Actor, ActorRef, Props}
 import akka.pattern.{ask, pipe}
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
-import ru.oseval.datahub.User.UserEntity
+import ru.oseval.datahub.User.{UserEntity, UserOps}
 import ru.oseval.datahub.data._
 
+import scala.concurrent.Future
 import scala.concurrent.duration._
 
 case class Group(id: String, title: String, members: Set[Long])
@@ -20,36 +21,38 @@ object Group {
 
   // CompoundData as wrapper need so much time - todo it
 
-  // it is must at-least-once due to SetData inside
+  // it must be at-least-once due to SetData inside
   case class GroupData(title: String,
-                       memberSet: SetData[Long, Long]
-                      )(implicit clockInt: ClockInt[Long]) extends CompoundData {
-    val clock = clockInt.cur
-    val previousClock = clockInt.prev
-
+                       memberSet: SetData[Long, Long],
+                       clock: Long
+                      ) extends AtLeastOnceData {
+    // due to memberSet is a base for this data, then his clock should be increased on each data update
+    // but SetData has no such ability and therefore GroupData should have its own clock
+    val previousClock: Long = memberSet.previousClock
+    val isSolid: Boolean = memberSet.isSolid
     override type C = Long
     lazy val members = memberSet.elements.toSet
-    protected val children = Set(memberSet)
   }
 
   object GroupOps extends DataOps {
     override type D = GroupData
     override val ordering: Ordering[Long] = Ordering.Long
-    override val zero: GroupData = GroupData("", SetDataOps.zero(ClockInt(0L, 0L), ordering))(ClockInt(0L, 0L))
+    override val zero: GroupData = GroupData("", SetDataOps.zero(ClockInt(0L, 0L), ordering))
 
     override def combine(a: GroupData, b: GroupData): GroupData = {
-      val (first, second) = if (ordering.gt(a.clock, b.clock)) (b, a) else (a, b)
+      val second = if (ordering.gt(a.clock, b.clock)) a else b
       GroupData(
-        title = if (second.title.nonEmpty) second.title else first.title,
-        memberSet = SetDataOps.combine(a.memberSet, b.memberSet)
-      )(ClockInt(second.clock, first.previousClock))
+        title = second.title,
+        memberSet = SetDataOps.combine(a.memberSet, b.memberSet),
+        clock =
+      )
     }
 
     override def nextClock(current: Long): Long =
       System.currentTimeMillis max (current + 1L)
 
     override def diffFromClock(a: GroupData, from: Long): GroupData =
-      a.copy(memberSet = SetDataOps.diffFromClock(a.memberSet, from))(ClockInt(a.clock, from))
+      a.copy(memberSet = SetDataOps.diffFromClock(a.memberSet, from))(a.clock)
     override def getRelations(data: GroupData): Set[String] = data.members.map(UserEntity(_).id)
   }
 
@@ -60,14 +63,14 @@ object Group {
 }
 
 private class GroupActor(id: String, title: String, notifier: ActorRef)
-  extends Actor with ActorDataMethods {
+  extends Actor with ActorDataMethods[Future] {
   import Group._
   import context.dispatcher
   private val log = LoggerFactory.getLogger(getClass)
 
   private implicit val timeout: Timeout = 3.seconds
   private val group = GroupEntity(id)
-  protected val storage = new LocalDataStorage(log, ActorFacade(_, self), notifier.ask(_).mapTo[Unit])
+  protected val storage = new LocalDataStorage(log, ActorFacade(_, self), AsyncDatahub)
 
   {
     implicit val cint: ClockInt[Long] = ClockInt(0L, System.currentTimeMillis)

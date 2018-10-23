@@ -22,23 +22,12 @@ val commonSettings = Seq(
   )
 )
 
-lazy val root = (project in file(".")).aggregate(core, datahubAkka, examples, datahubJava)
+lazy val root = (project in file(".")).aggregate(core, examples, datahubJava)
 
 lazy val core = (project in file("core")).settings(commonSettings)
 
-val akkaV = "2.5.11"
-
-lazy val datahubAkka = (project in file("datahub-akka"))
-  .dependsOn(core)
-  .settings(commonSettings)
-  .settings(libraryDependencies ++= Seq(
-    "com.typesafe.akka" %% "akka-cluster-sharding" % akkaV,
-    "com.typesafe.akka" %% "akka-distributed-data" % akkaV,
-    "com.typesafe.akka" %% "akka-testkit" % akkaV % "test"
-  ))
-
 lazy val examples = (project in file("examples"))
-  .dependsOn(core, datahubAkka)
+  .dependsOn(core)
   .settings(commonSettings)
 
 lazy val datahubJava = project in file("datahub-java")
