@@ -22,13 +22,13 @@ class LocalStorageSpec extends FlatSpecLike
 
   val time = System.currentTimeMillis
   val product1Data = ProductData("Product1", 4, time)
-  val warehouseData1 = ALOData(product1.productId)(ClockInt(time + 3, 0L))
+  val warehouseData1 = ALOData(product1)(ClockInt(time + 3, 0L))
   val warehouseData2 = warehouseData1.updated(product2.productId, time + 4)
   val warehouseDataTotal = WarehouseOps.combine(warehouseData1, warehouseData2)
 
   // need at least once data here because we tests not solid data
   val time2 = System.currentTimeMillis
-  val warehouse2Data1 = ALOData(warehouse2.id)(ClockInt(time2, 0L))
+  val warehouse2Data1 = ALOData(warehouse2)(ClockInt(time2, 0L))
   val warehouse2Data2 = warehouse2Data1.updated(product1.id, time2 + 1)
   val warehouse2Data3 = warehouse2Data2.updated(product1.id, time2 + 2)
 

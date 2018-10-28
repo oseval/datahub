@@ -64,6 +64,8 @@ abstract class DataOps {
   def getRelations(data: D): (Set[Entity], Set[Entity])
 
   def approveRelation(data: D, relationId: String): Boolean = true
+
+  def widen[T >: this.type <: DataOps]: T = this
 }
 
 case class ClockInt[C](cur: C, start: C)

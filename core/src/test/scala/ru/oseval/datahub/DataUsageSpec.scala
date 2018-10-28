@@ -24,18 +24,15 @@ class DataUsageSpec extends FlatSpecLike
   with CommonTestMethods {
 
   // to simulate network errors
-  val flawedDatahub = new AsyncDatahub(new MemoryStorage, repeater) {
+  val flawedDatahub = new AsyncDatahub() {
     private def withFlaw(f: () => Future[Unit]): Future[Unit] =
       if (Random.nextInt % 2 == 1) Future.failed(new Exception("Datahub call was flawed"))
       else f()
-    override def register(facade: EntityFacade)
-                         (lastClock: facade.entity.ops.D#C,
-                          relationClocks: Map[Entity, Any],
-                          forcedSubscribers: Set[EntityFacade]): Future[Unit] =
-      withFlaw(() => super.register(facade)(lastClock, relationClocks, forcedSubscribers))
+    override def register(facade: EntityFacade): Unit =
+      withFlaw(() => super.register(facade))
     override def dataUpdated(entity: Entity, forcedSubscribers: Set[EntityFacade])
-                            (data: entity.ops.D): Future[Unit] =
-      withFlaw(() => super.dataUpdated(entity, forcedSubscribers)(data))
+                            (data: entity.ops.D): Unit =
+      withFlaw(() => super.dataUpdated(entity)(data))
     override def subscribe(entity: Entity, // this must be entity to get ops and compare clocks
                            subscriber: Entity,
                            lastKnownDataClockOpt: Option[Any]): Future[Unit] =

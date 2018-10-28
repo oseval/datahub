@@ -9,7 +9,7 @@ import scala.reflect.ClassTag
 class LocalDataStorage[M[_]](log: Logger,
                              createFacade: Entity => EntityFacade,
                              datahub: Datahub[M],
-                             knownData: Map[Entity, Data] = Map.empty) {
+                             knownData: Map[Entity, Data] = Map.empty) extends Subscriber {
   private val entities = mutable.Map[String, Entity](knownData.keys.map(e => e.id -> e).toSeq: _*)
   private val relations = mutable.Map.empty[String, mutable.Set[String]] // relation -> entities
 
@@ -23,13 +23,14 @@ class LocalDataStorage[M[_]](log: Logger,
     relations.getOrElseUpdate(relationId, mutable.Set.empty) += entityId
   private def subscribeOnRelation(entity: Entity, relation: Entity, lastKnownClock: Any) = {
     addRelation(entity.id, relation.id)
-    if (!datahub.subscribe(relation, entity, Some(lastKnownClock)))
+    if (!datahub.subscribe(relation, this, lastKnownClock))
       pendingSubscriptions += relation
   }
   private def removeRelation(entityId: String, relationId: String): Unit =
     relations.get(relationId).foreach { entityIds =>
       entityIds -= entityId
       if (entityIds.isEmpty) {
+        entities.get(relationId).foreach(datahub.unsubscribe(_, this))
         relations -= relationId
         datas -= relationId
       }
@@ -89,10 +90,13 @@ class LocalDataStorage[M[_]](log: Logger,
       update
     }
 
+  override def onUpdate(relationId: String, relationData: Data): Unit =
+    combineRelation(relationId, relationData)
+
   private def applyEntityUpdate(entity: Entity)
                                (curData: entity.ops.D,
                                 dataUpdate: entity.ops.D,
-                                updatedData: entity.ops.D): M[Unit] =
+                                updatedData: entity.ops.D): Unit =
     if (entities isDefinedAt entity.id) {
       val (addedRelations, removedRelations) = entity.ops getRelations dataUpdate
 
@@ -102,7 +106,6 @@ class LocalDataStorage[M[_]](log: Logger,
       }
       removedRelations.foreach { rel =>
         removeRelation(entity.id, rel.id)
-        datahub.unsubscribe(_, entity)
       }
 
       datas.update(entity.id, updatedData)
@@ -111,7 +114,7 @@ class LocalDataStorage[M[_]](log: Logger,
     } else addEntity(entity)(updatedData)
 
   def combineEntity(entity: Entity)
-                   (upd: entity.ops.D#C => entity.ops.D): M[Unit] = {
+                   (upd: entity.ops.D#C => entity.ops.D): Unit = {
     val curData = get(entity).getOrElse(entity.ops.zero)
     val dataUpdate = upd(entity.ops.nextClock(curData.clock))
     val updatedData = entity.ops.combine(curData, dataUpdate)
@@ -120,7 +123,7 @@ class LocalDataStorage[M[_]](log: Logger,
   }
 
   def updateEntity(entity: Entity)
-                  (upd: ClockInt[entity.ops.D#C] => entity.ops.D => entity.ops.D): M[Unit] = {
+                  (upd: ClockInt[entity.ops.D#C] => entity.ops.D => entity.ops.D): Unit = {
     val curData = get(entity).getOrElse(entity.ops.zero)
     val updatedData = upd(ClockInt(entity.ops.nextClock(curData.clock), entity.ops.zero.clock))(curData)
     val dataUpdate = entity.ops.diffFromClock(updatedData, curData.clock)
@@ -157,13 +160,12 @@ class LocalDataStorage[M[_]](log: Logger,
     * @return
     */
   def checkDataIntegrity: Boolean = {
-    pendingSubscriptions = pendingSubscriptions.filter { relation =>
+    pendingSubscriptions.foreach { relation =>
       val relClock = datas.get(relation.id).map(_.clock).getOrElse(relation.ops.zero.clock)
-      datahub.subscribe(relation, )
+      if (datahub.subscribe(relation, this, relClock)) pendingSubscriptions -= relation
     }
-    if (notSolidRelations.nonEmpty) (entities -- relations.keySet).headOption.foreach { case (_, e) =>
-      datahub.syncRelationClocks(e, notSolidRelations)
-    }
+
+    if (notSolidRelations.nonEmpty) datahub.syncRelationClocks(this, notSolidRelations)
 
     notSolidRelations.isEmpty
   }

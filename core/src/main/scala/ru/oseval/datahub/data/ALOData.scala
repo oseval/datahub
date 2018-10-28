@@ -10,21 +10,19 @@ import scala.collection.SortedMap
   * replicated separately. For example sequence of updates of some big data.
   * An A must be associative and idempotent.
   *
-  * @param ops ops for wrapping
-  * @tparam A
+  * @tparam AO
   */
-abstract class ALODataOps[A <: Data, AO <: DataOps](ops: AO)
-                                                   (implicit ev1: A =:= ops.D,
-                                                    ev2: ops.D =:= A,
-                                                    evC: A#C =:= ops.D#C) extends DataOps {
-  type D = ALOData[A]
-  override val ordering = Ordering.by(evC)(ops.ordering)
-  private val zeroA: A = ev2(ops.zero)
-  override val zero: ALOData[A] = ALOData(None, zeroA.clock, zeroA.clock, None)
+abstract class ALODataOps[AO <: DataOps] extends DataOps {
+  protected val ops: AO
+  type A = ops.D
+  type D = ALOData[ops.D]
+
+  override val ordering = ops.ordering
+  override val zero: ALOData[ops.D] = ALOData(None, ops.zero.clock, ops.zero.clock, None)
 
   override def getRelations(data: D): (Set[Entity], Set[Entity]) =
     data.data match {
-      case Some(d) => ops.getRelations(ev1(d))
+      case Some(d) => ops.getRelations(d)
       case None => (Set.empty[Entity], Set.empty[Entity])
     }
 

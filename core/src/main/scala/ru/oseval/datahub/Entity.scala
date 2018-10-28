@@ -24,12 +24,4 @@ trait EntityFacade {
     * @return
     */
   def getUpdatesFrom(dataClock: entity.ops.D#C): Future[entity.ops.D]
-
-  /**
-    * Receives updates of related external data
-    * @param relatedId
-    * @param relatedData
-    * @return
-    */
-  def onUpdate(relatedId: String, relatedData: Data): Future[Unit]
 }

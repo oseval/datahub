@@ -8,7 +8,7 @@ import scala.collection.SortedMap
   */
 object SetDataOps {
   def zero[A, C](implicit clockInt: ClockInt[C], ordering: Ordering[C]) =
-    SetData[A, C](SortedMap.empty, SortedMap.empty, None)
+    SetData[A, C](SortedMap.empty, SortedMap.empty)
 
   def diffFromClock[A, C](a: SetData[A, C], from: C)(implicit ordering: Ordering[C]): SetData[A, C] =
     SetData(
