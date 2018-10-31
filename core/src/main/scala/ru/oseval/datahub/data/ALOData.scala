@@ -80,11 +80,13 @@ abstract class ALODataOps[AO <: DataOps] extends DataOps {
         first.further.map(combine(_, second)).orElse(Some(second))
       )
   }
+
+  override def nextClock(current: ops.D#C): ops.D#C = ops.nextClock(current)
 }
 
 object ALOData {
-  def apply[A <: Data](data: A)(implicit clockInt: ClockInt[A#C]): ALOData[A] =
-    ALOData(Some(data), clockInt.cur, clockInt.start)
+  def apply[A <: Data](data: A)(implicit prevClock: A#C): ALOData[A] =
+    ALOData(Some(data), data.clock, prevClock)
 }
 
 case class ALOData[A <: Data](data: Option[A],
@@ -94,6 +96,6 @@ case class ALOData[A <: Data](data: Option[A],
                              ) extends AtLeastOnceData {
   override type C = A#C
   val isSolid: Boolean = further.isEmpty
-  def updated(updated: A, newClock: A#C): ALOData[A] =
-    copy(data = Some(updated), clock = newClock)
+  def updated(updated: A): ALOData[A] =
+    copy(data = Some(updated), clock = updated.clock)
 }

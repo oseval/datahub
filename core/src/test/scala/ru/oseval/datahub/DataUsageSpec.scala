@@ -25,19 +25,18 @@ class DataUsageSpec extends FlatSpecLike
 
   // to simulate network errors
   val flawedDatahub = new AsyncDatahub() {
-    private def withFlaw(f: () => Future[Unit]): Future[Unit] =
-      if (Random.nextInt % 2 == 1) Future.failed(new Exception("Datahub call was flawed"))
+    private def withFlaw[T](f: () => T): T =
+      if (Random.nextInt % 2 == 1) throw new Exception("Datahub call was flawed")
       else f()
     override def register(facade: EntityFacade): Unit =
       withFlaw(() => super.register(facade))
-    override def dataUpdated(entity: Entity, forcedSubscribers: Set[EntityFacade])
-                            (data: entity.ops.D): Unit =
+    override def dataUpdated(entity: Entity)(data: entity.ops.D): Unit =
       withFlaw(() => super.dataUpdated(entity)(data))
     override def subscribe(entity: Entity, // this must be entity to get ops and compare clocks
-                           subscriber: Entity,
-                           lastKnownDataClockOpt: Option[Any]): Future[Unit] =
-      withFlaw(() => super.subscribe(entity, subscriber, lastKnownDataClockOpt))
-    override def unsubscribe(entity: Entity, subscriber: Entity): Future[Unit] =
+                           subscriber: Subscriber,
+                           lastKnownDataClock: Any): Boolean =
+      withFlaw(() => super.subscribe(entity, subscriber, lastKnownDataClock))
+    override def unsubscribe(entity: Entity, subscriber: Subscriber): Unit =
       withFlaw(() => super.unsubscribe(entity, subscriber))
   }
 

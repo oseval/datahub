@@ -21,8 +21,8 @@ trait Datahub[M[_]] {
   def register(facade: EntityFacade): Unit
   def subscribe(entity: Entity,
                 subscriber: Subscriber,
-                lastKnownDataClockOpt: Any): Boolean
+                lastKnownDataClock: Any): Boolean
   def unsubscribe(entity: Entity, subscriber: Subscriber): Unit
   def dataUpdated(entity: Entity)(data: entity.ops.D): Unit
-  def syncRelationClocks(entity: Subscriber, relationClocks: Map[Entity, Any]): Unit
+  def syncRelationClocks(subscriber: Subscriber, relationClocks: Map[Entity, Any]): Unit
 }

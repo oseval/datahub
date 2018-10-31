@@ -25,10 +25,6 @@ object ProductTestData {
     override def diffFromClock(data: ProductData, from: ProductClock): ProductData = data
 
     override def getRelations(data: ProductData): (Set[Entity], Set[Entity]) = (Set.empty, Set.empty)
-
-    override def getForcedSubscribers(data: ProductData): Set[EntityFacade] = Set.empty
-
-    override def createFacadeFromEntityId(entityId: String): Option[EntityFacade] = None
   }
 
   case class ProductEntity(productId: Int) extends Entity {

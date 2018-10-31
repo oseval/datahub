@@ -53,12 +53,12 @@ class AsyncDatahub()(implicit val ec: ExecutionContext) extends Datahub[Future] 
 
   def subscribe(entity: Entity,
                 subscriber: Subscriber,
-                lastKnownDataClockOpt: Any): Boolean = {
+                lastKnownDataClock: Any): Boolean = {
     log.debug("subscribe {}, {}, {}", subscriber, entity.id, innerStorage.facade(entity.id))
 
     innerStorage.addSubscriber(entity.id, subscriber)
 
-    innerStorage.facade(entity.id).map(syncData(_, subscriber, Some(lastKnownDataClockOpt))).isDefined
+    innerStorage.facade(entity.id).map(syncData(_, subscriber, Some(lastKnownDataClock))).isDefined
   }
 
   protected def syncData(entityFacade: EntityFacade,

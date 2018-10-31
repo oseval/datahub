@@ -22,21 +22,4 @@ case class UserEntityFacade(entity: Entity) extends EntityFacade {
     * @return
     */
   override def getUpdatesFrom(dataClock: entity.ops.D#C): Future[entity.ops.D] = ???
-
-  /**
-    * Receives updates of related external data
-    *
-    * @param relatedId
-    * @param relatedData
-    * @return
-    */
-  override def onUpdate(relatedId: String, relatedData: Data): Future[Unit] = ???
-
-  /**
-    * When an entity is not trust to the relation kind then a subscription must approved
-    *
-    * @param relation
-    * @return
-    */
-  override def requestForApprove(relation: Entity): Future[Boolean] = ???
 }
