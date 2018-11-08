@@ -17,8 +17,8 @@ abstract class ALODataOps[AO <: DataOps] extends DataOps {
   type A = ops.D
   type D = ALOData[ops.D]
 
-  override val ordering = ops.ordering
-  override val zero: ALOData[ops.D] = ALOData(None, ops.zero.clock, ops.zero.clock, None)
+  override lazy val ordering = ops.ordering
+  override lazy val zero: ALOData[ops.D] = ALOData(None, ops.zero.clock, ops.zero.clock, None)
 
   override def getRelations(data: D): (Set[Entity], Set[Entity]) =
     data.data match {

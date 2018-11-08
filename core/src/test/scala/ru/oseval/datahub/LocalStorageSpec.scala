@@ -70,14 +70,13 @@ class LocalStorageSpec extends FlatSpecLike
     )
   }
 
-//  it should "sync relation when it is not solid" in {
-//    storage.addRelation(warehouse2)
-//    storage.combineRelation(warehouse2.id, warehouse2Data1)
-//    storage.combineRelation(warehouse2.id, warehouse2Data3)
-//
-//    storage.checkDataIntegrity shouldBe false
-//    verify(listener).syncRelationClocks(warehouse1, Map(warehouse2 -> warehouse2Data1.clock))
-//  }
+  it should "sync relation when it is not solid" in {
+    println(("sdfsfs", product1.id, storage.get(product1)))
+    storage.onUpdate(product1.id, ProductData("p1", 1, 4L))
+
+    storage.checkDataIntegrity shouldBe false
+    verify(listener).syncRelationClocks(storage, Map(product1 -> 0L))
+  }
 //
 //  it should "notify when local entity updated" in {
 //    storage.combineEntity(warehouse1)(_ => warehouseData2)

@@ -19,11 +19,16 @@ class LocalDataStorage[M[_]](log: Logger,
 
   private def createFacadeDep(e: Entity) = createFacade(e).asInstanceOf[EntityFacade { val entity: e.type }]
 
-  private def addRelation(entityId: String, relationId: String): Unit =
-    relations.getOrElseUpdate(relationId, mutable.Set.empty) += entityId
-  private def subscribeOnRelation(entity: Entity, relation: Entity, lastKnownClock: Any) = {
-    addRelation(entity.id, relation.id)
-    if (!datahub.subscribe(relation, this, lastKnownClock))
+  private def subscribeOnRelation(entity: Entity, relation: Entity) = {
+    println(("AAAAA", entity, relation))
+    entities.getOrElseUpdate(relation.id, relation)
+
+    relations.getOrElseUpdate(relation.id, mutable.Set.empty) += entity.id
+    val lastKnownData = get(relation) getOrElse {
+      datas.update(relation.id, relation.ops.zero)
+      relation.ops.zero
+    }
+    if (!datahub.subscribe(relation, this, lastKnownData.clock))
       pendingSubscriptions += relation
   }
   private def removeRelation(entityId: String, relationId: String): Unit =
@@ -48,10 +53,7 @@ class LocalDataStorage[M[_]](log: Logger,
 
     val (addedRelations, removedRelations) = entity.ops.getRelations(data)
     val entityRelations = addedRelations -- removedRelations
-    entityRelations.foreach { relation =>
-      val clock = datas.get(relation.id).map(_.clock) getOrElse relation.ops.zero.clock
-      subscribeOnRelation(entity, relation, clock)
-    }
+    entityRelations.foreach(subscribeOnRelation(entity, _))
   }
 
   def combineRelation(entityId: String, otherData: Data): Data =
@@ -100,10 +102,7 @@ class LocalDataStorage[M[_]](log: Logger,
     if (entities isDefinedAt entity.id) {
       val (addedRelations, removedRelations) = entity.ops getRelations dataUpdate
 
-      addedRelations.foreach { rel =>
-        val relClock = datas.get(rel.id).map(_.clock).getOrElse(rel.ops.zero.clock)
-        subscribeOnRelation(entity, rel, relClock)
-      }
+      addedRelations.foreach(subscribeOnRelation(entity, _))
       removedRelations.foreach { rel =>
         removeRelation(entity.id, rel.id)
       }

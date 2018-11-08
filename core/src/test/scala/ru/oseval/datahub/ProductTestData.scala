@@ -1,6 +1,6 @@
 package ru.oseval.datahub
 
-import ru.oseval.datahub.data.{Data, DataOps}
+import ru.oseval.datahub.data.{ALODataOps, Data, DataOps}
 
 object ProductTestData {
   type ProductId = Int
@@ -11,7 +11,7 @@ object ProductTestData {
     override val clock: ProductClock = lastUpdated
   }
 
-  object ProductOps extends DataOps {
+  object ProductOpsSimple extends DataOps {
     override type D = ProductData
     override val ordering: Ordering[ProductClock] = Ordering.Long
     override val zero: ProductData = ProductData("", 0, 0L)
@@ -25,6 +25,10 @@ object ProductTestData {
     override def diffFromClock(data: ProductData, from: ProductClock): ProductData = data
 
     override def getRelations(data: ProductData): (Set[Entity], Set[Entity]) = (Set.empty, Set.empty)
+  }
+
+  case object ProductOps extends ALODataOps[ProductOpsSimple.type] {
+    override protected val ops: ProductOpsSimple.type = ProductOpsSimple
   }
 
   case class ProductEntity(productId: Int) extends Entity {
