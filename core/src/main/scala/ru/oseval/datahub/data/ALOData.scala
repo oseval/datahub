@@ -26,7 +26,7 @@ abstract class ALODataOps[AO <: DataOps] extends DataOps {
       case None => (Set.empty[Entity], Set.empty[Entity])
     }
 
-  // TODO: can't be true if it a partial data - for local storage only. Restrict access to it.
+  // TODO: can't be true if it is a partial data - for local storage only. Restrict access to it.
   override def diffFromClock(a: ALOData[A], from: A#C): ALOData[A] =
     if (a.isSolid)
       ALOData(

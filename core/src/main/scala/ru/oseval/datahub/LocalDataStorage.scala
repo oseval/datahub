@@ -20,7 +20,6 @@ class LocalDataStorage[M[_]](log: Logger,
   private def createFacadeDep(e: Entity) = createFacade(e).asInstanceOf[EntityFacade { val entity: e.type }]
 
   private def subscribeOnRelation(entity: Entity, relation: Entity) = {
-    println(("AAAAA", entity, relation))
     entities.getOrElseUpdate(relation.id, relation)
 
     relations.getOrElseUpdate(relation.id, mutable.Set.empty) += entity.id

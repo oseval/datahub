@@ -6,9 +6,9 @@ import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mockito.MockitoSugar
 import org.slf4j.LoggerFactory
 import org.mockito.Mockito._
-import ru.oseval.datahub.ProductTestData.{ProductData, ProductEntity}
+import ru.oseval.datahub.ProductTestData.{ProductData, ProductEntity, ProductOps}
 import ru.oseval.datahub.WarehouseTestData.{WarehouseData, WarehouseEntity, WarehouseOps}
-import ru.oseval.datahub.data.{ALOData, ClockInt, Data}
+import ru.oseval.datahub.data.{ALOData, Data}
 
 class LocalStorageSpec extends FlatSpecLike
   with MockitoSugar
@@ -21,16 +21,11 @@ class LocalStorageSpec extends FlatSpecLike
   val warehouse2 = WarehouseEntity("2")
 
   val time = System.currentTimeMillis
-//  val product1Data = ProductData("Product1", 4, time)
+  val product1Data = ALOData(ProductData("p1", 1, 4L))(2L)
+  val product1DataTotal = ProductOps.combine(ProductOps.zero, product1Data)
   val warehouseData1 = ALOData(WarehouseData(Set(product1.productId), time + 3))(0)
-//  val warehouseData2 = warehouseData1.updated(WarehouseData(Set(product1.productId, product2.productId)))
-//  val warehouseDataTotal = WarehouseOps.combine(warehouseData1, warehouseData2)
-//
-//  // need at least once data here because we tests not solid data
-//  val time2 = System.currentTimeMillis
-//  val warehouse2Data1 = ALOData(warehouseData2.data.get)(0L)
-//  val warehouse2Data2 = warehouse2Data1.updated(Set(product1.productId), time2 + 1)
-//  val warehouse2Data3 = warehouse2Data2.updated(product1.id, time2 + 2)
+  val warehouseData2 = warehouseData1.updated(WarehouseData(Set(product2.productId), time + 4))
+  val warehouseDataTotal = WarehouseOps.combine(warehouseData1, warehouseData2)
 
   val log = LoggerFactory.getLogger(getClass)
 
@@ -56,12 +51,6 @@ class LocalStorageSpec extends FlatSpecLike
 
   behavior of "LocalStorage"
 
-//  it should "register relation and combine it's data" in {
-//    storage.addRelation(warehouse1.id, product1.id)
-//    storage.combineRelation(product1.id, product1Data)
-//    storage.get(product1) shouldBe Some(product1Data)
-//  }
-
   it should "register entity with right relation clocks" in {
     storage.addEntity(warehouse1)(warehouseData1)
 
@@ -71,20 +60,19 @@ class LocalStorageSpec extends FlatSpecLike
   }
 
   it should "sync relation when it is not solid" in {
-    println(("sdfsfs", product1.id, storage.get(product1)))
-    storage.onUpdate(product1.id, ProductData("p1", 1, 4L))
+    storage.onUpdate(product1.id, product1Data)
 
     storage.checkDataIntegrity shouldBe false
     verify(listener).syncRelationClocks(storage, Map(product1 -> 0L))
   }
-//
-//  it should "notify when local entity updated" in {
-//    storage.combineEntity(warehouse1)(_ => warehouseData2)
-//
-//    verify(listener).dataUpdated(warehouse1, Set.empty)(warehouseData2)
-//
-//    storage.get(warehouse1) shouldBe Some(warehouseDataTotal)
-//    storage.get[ProductData](product1.id) shouldBe Some(product1Data)
-//    storage.get[ProductData](product2.id) shouldBe None
-//  }
+
+  it should "notify when local entity updated" in {
+    storage.combineEntity(warehouse1)(_ => warehouseData2)
+
+    verify(listener).dataUpdated(warehouse1)(warehouseData2)
+
+    storage.get(warehouse1) shouldBe Some(warehouseDataTotal)
+    storage.get[ALOData[ProductData]](product1.id) shouldBe Some(product1DataTotal)
+    storage.get[ALOData[ProductData]](product2.id) shouldBe Some(ProductOps.zero)
+  }
 }
