@@ -32,7 +32,8 @@ object AsyncDatahub {
 }
 import AsyncDatahub._
 
-class AsyncDatahub()(implicit val ec: ExecutionContext) extends Datahub[Future] {
+// TODO: AsyncDatahub(store: SubscriptionsStore)
+class AsyncDatahub()(implicit val ec: ExecutionContext) extends Datahub {
   protected val innerStorage = new MemoryInnerStorage
   protected val log = LoggerFactory.getLogger(getClass)
 
@@ -49,7 +50,7 @@ class AsyncDatahub()(implicit val ec: ExecutionContext) extends Datahub[Future] 
 
   def sendChangeToOne(entity: Entity, subscriber: Subscriber)
                      (entityData: entity.ops.D): Unit =
-    subscriber.onUpdate(entity.id, entityData)
+    subscriber.onUpdate(entity)(entityData)
 
   def subscribe(entity: Entity,
                 subscriber: Subscriber,
@@ -73,6 +74,7 @@ class AsyncDatahub()(implicit val ec: ExecutionContext) extends Datahub[Future] 
 
     val lastKnownDataClock = lastKnownDataClockOpt.flatMap(entityOps.matchClock) getOrElse entityOps.zero.clock
 
+    // TODO: optimize this on facade level (e.g. store last clock inside global facade entity
     entityFacade.getUpdatesFrom(lastKnownDataClock).map(d =>
       sendChangeToOne(entityFacade.entity, subscriber)(d)
     )

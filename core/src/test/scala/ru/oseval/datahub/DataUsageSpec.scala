@@ -6,8 +6,8 @@ import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.mockito.Mockito._
 
 import scala.concurrent.duration._
-import ProductTestData._
-import WarehouseTestData._
+import ru.oseval.datahub.domain.ProductTestData._
+import ru.oseval.datahub.domain.WarehouseTestData._
 import org.scalatest.mockito.MockitoSugar
 import ru.oseval.datahub
 import ru.oseval.datahub.data.{ALOData, ClockInt}

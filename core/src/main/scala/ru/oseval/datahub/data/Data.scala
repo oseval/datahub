@@ -68,6 +68,34 @@ abstract class DataOps {
   def widen[T >: this.type <: DataOps]: T = this
 }
 
+object InferredOps {
+  trait ImplicitClockBehavior[C] {
+    val ordering: Ordering[C]
+    def nextClock(current: C): C
+  }
+  implicit val timeClockBehavior: ImplicitClockBehavior[Long] = new ImplicitClockBehavior[Long] {
+    val ordering: Ordering[Long] = Ordering.Long
+    def nextClock(current: Long): Long = System.currentTimeMillis max (current + 1L)
+  }
+  abstract class InferredOps[Dt <: Data](z: Dt, k: String, behavior: ImplicitClockBehavior[Dt#C]) extends DataOps {
+    override type D = Dt
+    override val kind: String = k
+    override val zero: D = z
+    override val ordering: Ordering[D#C] = behavior.ordering
+    override def nextClock(current: Dt#C): D#C = behavior.nextClock(current)
+    override def getRelations(data: D): (Set[Entity], Set[Entity]) = (Set.empty, Set.empty)
+  }
+  def apply[Dt <: Data](z: Dt)(implicit behavior: ImplicitClockBehavior[Dt#C]): InferredOps[Dt] =
+    apply(z, z.getClass.getName, _ => (Set.empty, Set.empty))
+  def apply[Dt <: Data](empty: Dt, kind: String)(implicit behavior: ImplicitClockBehavior[Dt#C]): InferredOps[Dt] =
+    apply(empty, kind, _ => (Set.empty, Set.empty))
+  def apply[Dt <: Data](empty: Dt, kind: String, relations: Dt => (Set[Entity], Set[Entity]))
+                       (implicit behavior: ImplicitClockBehavior[Dt#C]): InferredOps[Dt] =
+    new InferredOps[Dt](empty, kind, behavior) {
+      override def getRelations(data: D): (Set[Entity], Set[Entity]) = relations(data)
+    }
+}
+
 case class ClockInt[C](cur: C, start: C)
 
 case class InvalidDataException(message: String) extends RuntimeException(message)

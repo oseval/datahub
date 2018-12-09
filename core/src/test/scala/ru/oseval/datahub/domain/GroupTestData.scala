@@ -25,7 +25,7 @@ object GroupOpsSimple extends DataOps {
 }
 
 object GroupOps extends ALODataOps[GroupOpsSimple.type] {
-  override protected val ops: GroupOpsSimple.type = GroupOpsSimple
+  override protected val ops = GroupOpsSimple
 }
 
 case class GroupEntity(groupId: String) extends Entity {

@@ -6,10 +6,10 @@ trait Subscriber {
   /**
     * Receives updates of related external data
     *
-    * @param relationId
+    * @param relation
     * @param relationData
     */
-  def onUpdate(relationId: String, relationData: Data): Unit
+  def onUpdate(relation: Entity)(relationData: relation.ops.D): Unit
 }
 
 /**
@@ -17,7 +17,7 @@ trait Subscriber {
   * E.g. mostly in runtime.
   * @tparam M
   */
-trait Datahub[M[_]] {
+trait Datahub {
   def register(facade: EntityFacade): Unit
   def subscribe(entity: Entity,
                 subscriber: Subscriber,

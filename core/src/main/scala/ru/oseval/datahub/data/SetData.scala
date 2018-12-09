@@ -12,18 +12,19 @@ object SetDataOps {
 
   def diffFromClock[A, C](a: SetData[A, C], from: C)(implicit ordering: Ordering[C]): SetData[A, C] =
     SetData(
-      a.underlying.filterKeys(c => ordering.gt(c, from)),
+      a.added.filterKeys(c => ordering.gt(c, from)),
       a.removed.filterKeys(c => ordering.gt(c, from)),
     )
 }
 
-case class SetData[+A, Clk](private[data] val underlying: SortedMap[Clk, A],
+case class SetData[+A, Clk](private[data] val added: SortedMap[Clk, A],
                             private[data] val removed: SortedMap[Clk, A]) {
-  type C = Clk
-  lazy val elements: Seq[A] = (underlying -- removed.keySet).values.toList
-  def add[B >: A](el: B)(implicit newCint: ClockInt[Clk]): SetData[B, Clk] =
-    SetData(underlying + (newCint.cur -> el), removed)
+  private lazy val actualMap: SortedMap[Clk, A] = added -- removed.keySet
+  lazy val elements: Seq[A] = actualMap.values.toList
+  lazy val removedElements: Seq[A] = (removed -- actualMap.keySet).values.toList
+  def add[B >: A](el: B, newClock: Clk): SetData[B, Clk] =
+    SetData(added + (newClock -> el), removed)
 
-  def remove[B >: A](el: B)(implicit newCint: ClockInt[Clk]): SetData[B, Clk] =
-    SetData(underlying, removed.updated(newCint.cur, el))
+  def remove[B >: A](el: B, newClock: Clk): SetData[B, Clk] =
+    SetData(added, removed.updated(newClock, el))
 }

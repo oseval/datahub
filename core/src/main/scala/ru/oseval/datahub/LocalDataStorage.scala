@@ -8,7 +8,7 @@ import scala.reflect.ClassTag
 
 class LocalDataStorage[M[_]](log: Logger,
                              createFacade: Entity => EntityFacade,
-                             datahub: Datahub[M],
+                             datahub: Datahub, // TODO: WeakReference
                              knownData: Map[Entity, Data] = Map.empty) extends Subscriber {
   private val entities = mutable.Map[String, Entity](knownData.keys.map(e => e.id -> e).toSeq: _*)
   private val relations = mutable.Map.empty[String, mutable.Set[String]] // relation -> entities
@@ -71,6 +71,7 @@ class LocalDataStorage[M[_]](log: Logger,
 
   private def combineRelation(entity: Entity)(update: entity.ops.D): entity.ops.D =
     if (relations contains entity.id) {
+      println(("AAAAA", entity, update))
       val current = get(entity).getOrElse(entity.ops.zero)
       val updated = entity.ops.combine(current, update)
 
@@ -91,8 +92,8 @@ class LocalDataStorage[M[_]](log: Logger,
       update
     }
 
-  override def onUpdate(relationId: String, relationData: Data): Unit =
-    combineRelation(relationId, relationData)
+  override def onUpdate(relation: Entity)(relationData: relation.ops.D): Unit =
+    combineRelation(relation)(relationData)
 
   private def applyEntityUpdate(entity: Entity)
                                (curData: entity.ops.D,
