@@ -1,7 +1,7 @@
-package ru.oseval.datahub.domain
+package com.github.oseval.datahub.domain
 
-import ru.oseval.datahub.{Entity, LocalEntityFacade}
-import ru.oseval.datahub.data.{AIDataOps, Data, SetData}
+import com.github.oseval.datahub.{Entity, LocalEntityFacade}
+import com.github.oseval.datahub.data.{AIDataOps, Data, SetData}
 
 import scala.concurrent.Future
 

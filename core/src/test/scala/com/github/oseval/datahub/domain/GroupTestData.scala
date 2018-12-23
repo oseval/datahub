@@ -1,7 +1,7 @@
-package ru.oseval.datahub.domain
+package com.github.oseval.datahub.domain
 
-import ru.oseval.datahub.Entity
-import ru.oseval.datahub.data._
+import com.github.oseval.datahub.Entity
+import com.github.oseval.datahub.data._
 
 case class GroupMessage(text: String)
 

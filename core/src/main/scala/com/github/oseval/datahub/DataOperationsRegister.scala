@@ -1,6 +1,6 @@
-package ru.oseval.datahub
+package com.github.oseval.datahub
 
-import ru.oseval.datahub.data.DataOps
+import com.github.oseval.datahub.data.DataOps
 
 import scala.collection.concurrent.TrieMap
 

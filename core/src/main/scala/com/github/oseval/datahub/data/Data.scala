@@ -1,6 +1,6 @@
-package ru.oseval.datahub.data
+package com.github.oseval.datahub.data
 
-import ru.oseval.datahub.{Entity, LocalEntityFacade}
+import com.github.oseval.datahub.{Entity, LocalEntityFacade}
 
 /**
   * Idempotent (due to [[Data.clock]] and commutative (due to [[DataOps.ordering]]) data model.

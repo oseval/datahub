@@ -1,7 +1,7 @@
-package ru.oseval.datahub
+package com.github.oseval.datahub
 
 import org.scalatest.{FlatSpecLike, Matchers}
-import ru.oseval.datahub.data.{ClockInt, SetDataOps}
+import com.github.oseval.datahub.data.{ClockInt, SetDataOps}
 
 class SetDataSpec extends FlatSpecLike with Matchers {
   behavior of "SetData"

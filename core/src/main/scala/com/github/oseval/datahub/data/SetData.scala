@@ -1,4 +1,4 @@
-package ru.oseval.datahub.data
+package com.github.oseval.datahub.data
 
 import scala.collection.SortedMap
 

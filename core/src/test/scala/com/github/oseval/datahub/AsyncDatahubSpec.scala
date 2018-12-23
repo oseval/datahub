@@ -1,13 +1,13 @@
-package ru.oseval.datahub
+package com.github.oseval.datahub
 
 import org.scalatest
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike}
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.mockito.Mockito._
 
-import ru.oseval.datahub.domain.ProductTestData._
+import com.github.oseval.datahub.domain.ProductTestData._
 import org.scalatest.mockito.MockitoSugar
-import ru.oseval.datahub.data.ALOData
+import com.github.oseval.datahub.data.ALOData
 
 import scala.concurrent.Future
 

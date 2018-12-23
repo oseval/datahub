@@ -1,7 +1,7 @@
-package ru.oseval.datahub.data
+package com.github.oseval.datahub.data
 
-import ru.oseval.datahub.data.InferredOps.InferredOps
-import ru.oseval.datahub.Entity
+import com.github.oseval.datahub.data.InferredOps.InferredOps
+import com.github.oseval.datahub.Entity
 
 /**
   * This wrapper intended to add the at-least-one delivery control ability to data.

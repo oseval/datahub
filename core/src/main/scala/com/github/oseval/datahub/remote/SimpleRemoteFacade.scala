@@ -1,10 +1,10 @@
-package ru.oseval.datahub.remote
+package com.github.oseval.datahub.remote
 
 import java.util.concurrent.atomic.AtomicReference
 
-import ru.oseval.datahub.remote.RemoteFacade.SubscriptionsManagement
-import ru.oseval.datahub.{Datahub, Entity, RemoteEntityFacade, Subscriber}
-import ru.oseval.datahub.remote.RemoteSubscriber.SubsOps
+import com.github.oseval.datahub.remote.RemoteFacade.SubscriptionsManagement
+import com.github.oseval.datahub.{Datahub, Entity, RemoteEntityFacade, Subscriber}
+import com.github.oseval.datahub.remote.RemoteSubscriber.SubsOps
 
 /**
   * This is one of the remotes interactions parts

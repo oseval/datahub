@@ -1,12 +1,12 @@
-package ru.oseval.datahub
+package com.github.oseval.datahub
 
 import org.scalatest.{FlatSpecLike, Matchers}
 import org.scalatest.concurrent.Eventually
 import org.mockito.Mockito._
-import ru.oseval.datahub.domain.ProductTestData._
-import ru.oseval.datahub.data.SetData
+import com.github.oseval.datahub.domain.ProductTestData._
+import com.github.oseval.datahub.data.SetData
 import org.mockito.Mockito.spy
-import ru.oseval.datahub.domain.WarehouseTestData.{WarehouseData, WarehouseEntity, WarehouseOps}
+import com.github.oseval.datahub.domain.WarehouseTestData.{WarehouseData, WarehouseEntity, WarehouseOps}
 
 import scala.util.Try
 import scala.concurrent.duration._

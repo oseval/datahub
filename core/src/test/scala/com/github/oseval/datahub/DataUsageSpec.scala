@@ -1,4 +1,4 @@
-package ru.oseval.datahub
+package com.github.oseval.datahub
 
 import org.scalatest
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike}
@@ -6,11 +6,11 @@ import org.scalatest.concurrent.{Eventually, ScalaFutures}
 import org.mockito.Mockito._
 
 import scala.concurrent.duration._
-import ru.oseval.datahub.domain.ProductTestData._
-import ru.oseval.datahub.domain.WarehouseTestData._
+import com.github.oseval.datahub.domain.ProductTestData._
+import com.github.oseval.datahub.domain.WarehouseTestData._
 import org.scalatest.mockito.MockitoSugar
-import ru.oseval.datahub
-import ru.oseval.datahub.data.{ALOData, ClockInt}
+import com.github.oseval.datahub
+import com.github.oseval.datahub.data.{ALOData, ClockInt}
 
 import scala.concurrent.Future
 import scala.util.Random

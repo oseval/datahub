@@ -1,7 +1,7 @@
-package ru.oseval.datahub
+package com.github.oseval.datahub
 
 import org.slf4j.Logger
-import ru.oseval.datahub.data.{AtLeastOnceData, ClockInt, Data}
+import com.github.oseval.datahub.data.{AtLeastOnceData, ClockInt, Data}
 
 import scala.collection.mutable
 import scala.reflect.ClassTag

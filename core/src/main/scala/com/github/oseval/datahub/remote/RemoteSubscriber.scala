@@ -1,10 +1,10 @@
-package ru.oseval.datahub.remote
+package com.github.oseval.datahub.remote
 
 import java.util.concurrent.atomic.AtomicReference
 
-import ru.oseval.datahub.data.InferredOps.InferredOps
-import ru.oseval.datahub.data._
-import ru.oseval.datahub._
+import com.github.oseval.datahub.data.InferredOps.InferredOps
+import com.github.oseval.datahub.data._
+import com.github.oseval.datahub._
 
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.{ExecutionContext, Future}

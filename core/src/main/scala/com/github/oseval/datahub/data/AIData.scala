@@ -1,6 +1,6 @@
-package ru.oseval.datahub.data
+package com.github.oseval.datahub.data
 
-import ru.oseval.datahub.Entity
+import com.github.oseval.datahub.Entity
 
 /**
   * Data which are associative and idempotent

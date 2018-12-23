@@ -1,6 +1,6 @@
-package ru.oseval.datahub
+package com.github.oseval.datahub
 
-import ru.oseval.datahub.data.{Data, DataOps}
+import com.github.oseval.datahub.data.{Data, DataOps}
 
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration

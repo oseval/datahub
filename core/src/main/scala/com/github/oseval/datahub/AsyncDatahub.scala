@@ -1,4 +1,4 @@
-package ru.oseval.datahub
+package com.github.oseval.datahub
 
 import org.slf4j.LoggerFactory
 

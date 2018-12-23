@@ -1,14 +1,14 @@
-package ru.oseval.datahub
+package com.github.oseval.datahub
 
 import org.scalatest.{FlatSpecLike, Matchers}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mockito.MockitoSugar
 import org.slf4j.LoggerFactory
 import org.mockito.Mockito._
-import ru.oseval.datahub.data.InferredOps.InferredOps
-import ru.oseval.datahub.domain.ProductTestData.{ProductData, ProductEntity, ProductOps}
-import ru.oseval.datahub.domain.WarehouseTestData.{WarehouseData, WarehouseEntity, WarehouseOps}
-import ru.oseval.datahub.data._
+import com.github.oseval.datahub.data.InferredOps.InferredOps
+import com.github.oseval.datahub.domain.ProductTestData.{ProductData, ProductEntity, ProductOps}
+import com.github.oseval.datahub.domain.WarehouseTestData.{WarehouseData, WarehouseEntity, WarehouseOps}
+import com.github.oseval.datahub.data._
 
 class LocalStorageSpec extends FlatSpecLike
   with MockitoSugar

@@ -1,8 +1,8 @@
-package ru.oseval.datahub.domain
+package com.github.oseval.datahub.domain
 
-import ru.oseval.datahub.Entity
-import ru.oseval.datahub.data.InferredOps.{InferredOps}
-import ru.oseval.datahub.data.{Data, InferredOps}
+import com.github.oseval.datahub.Entity
+import com.github.oseval.datahub.data.InferredOps.{InferredOps}
+import com.github.oseval.datahub.data.{Data, InferredOps}
 
 object ProductTestData {
   type ProductId = Int

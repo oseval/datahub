@@ -1,16 +1,16 @@
-package ru.oseval.datahub
+package com.github.oseval.datahub
 
 import org.slf4j.LoggerFactory
 import java.util.concurrent.{ScheduledThreadPoolExecutor, TimeUnit}
 
 import org.mockito.Mockito.spy
 import org.scalatest.mockito.MockitoSugar
-import ru.oseval.datahub.data.{ALOData, Data, DataOps}
-import ru.oseval.datahub.domain.ProductTestData.{ProductClock, ProductEntity, ProductOps}
-import ru.oseval.datahub.remote.RemoteSubscriber.SubsOps
-import ru.oseval.datahub.remote.{RemoteSubscriber, SimpleRemoteFacade, SubscriptionStorage}
+import com.github.oseval.datahub.data.{ALOData, Data, DataOps}
+import com.github.oseval.datahub.domain.ProductTestData.{ProductClock, ProductEntity, ProductOps}
+import com.github.oseval.datahub.remote.RemoteSubscriber.SubsOps
+import com.github.oseval.datahub.remote.{RemoteSubscriber, SimpleRemoteFacade, SubscriptionStorage}
 import org.scalatest
-import ru.oseval.datahub.domain.WarehouseTestData.{WarehouseEntity, WarehouseOps}
+import com.github.oseval.datahub.domain.WarehouseTestData.{WarehouseEntity, WarehouseOps}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._

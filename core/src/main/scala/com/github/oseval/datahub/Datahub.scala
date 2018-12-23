@@ -1,6 +1,6 @@
-package ru.oseval.datahub
+package com.github.oseval.datahub
 
-import ru.oseval.datahub.data.Data
+import com.github.oseval.datahub.data.Data
 
 trait Subscriber {
   /**
