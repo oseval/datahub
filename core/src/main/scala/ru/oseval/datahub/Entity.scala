@@ -15,13 +15,36 @@ trait Entity {
   lazy val lift: Entity = this
 }
 
-trait EntityFacade {
+sealed trait EntityFacade
+
+trait LocalEntityFacade extends EntityFacade {
   val entity: Entity
 
   /**
-    * Request explicit data difference from entity
+    * Request explicit data difference from entity to force data syncing
+    * Facade should send data update (from a given clock) to the datahub as reaction on call of this method
+    * In other case data will be synced only after next data update
     * @param dataClock
     * @return
     */
-  def getUpdatesFrom(dataClock: entity.ops.D#C): Future[entity.ops.D]
+  def syncData(dataClock: entity.ops.D#C): Unit
+}
+
+trait RemoteEntityFacade extends EntityFacade {
+  val ops: DataOps
+
+  /**
+    * Request explicit data difference from entity to force data syncing
+    * Facade should sync data with remote (from a given clock) as reaction on call of this method
+    * In other case data will be synced only after next data update
+    * @param dataClock
+    * @return
+    */
+  def syncData(entityId: String, dataClock: ops.D#C): Unit
+
+  def onSubscribe(entity: Entity,
+                  subscriber: Subscriber,
+                  lastKnownDataClock: Any): Unit
+
+  def onUnsubscribe(entity: Entity, subscriber: Subscriber): Unit
 }

@@ -6,18 +6,18 @@ import ru.oseval.datahub.data.{AtLeastOnceData, ClockInt, Data}
 import scala.collection.mutable
 import scala.reflect.ClassTag
 
-class LocalDataStorage[M[_]](log: Logger,
-                             createFacade: Entity => EntityFacade,
-                             datahub: Datahub, // TODO: WeakReference
-                             knownData: Map[Entity, Data] = Map.empty) extends Subscriber {
+class LocalDataStorage(log: Logger,
+                       createFacade: Entity => LocalEntityFacade,
+                       datahub: Datahub, // TODO: WeakReference
+                       knownData: Map[Entity, Data] = Map.empty) extends Subscriber {
   private val entities = mutable.Map[String, Entity](knownData.keys.map(e => e.id -> e).toSeq: _*)
   private val relations = mutable.Map.empty[String, mutable.Set[String]] // relation -> entities
 
   private val pendingSubscriptions = mutable.Set.empty[Entity]  
   private var notSolidRelations = Map.empty[Entity, Any]
-  private val datas = mutable.Map(knownData.map { case (e, v) => e.id -> v }.toSeq: _*)
+  private val datas: mutable.Map[String, Data] = mutable.Map(knownData.map { case (e, v) => e.id -> v }.toSeq: _*)
 
-  private def createFacadeDep(e: Entity) = createFacade(e).asInstanceOf[EntityFacade { val entity: e.type }]
+  private def createFacadeDep(e: Entity) = createFacade(e).asInstanceOf[LocalEntityFacade { val entity: e.type }]
 
   private def subscribeOnRelation(entity: Entity, relation: Entity) = {
     entities.getOrElseUpdate(relation.id, relation)
@@ -42,10 +42,9 @@ class LocalDataStorage[M[_]](log: Logger,
 
   def addEntity(entity: Entity)(_data: entity.ops.D): Unit = {
     entities.update(entity.id, entity)
-    val data: entity.ops.D = get(entity).getOrElse {
-      datas.update(entity.id, _data)
-      _data
-    }
+    val data: entity.ops.D = get(entity).map(entity.ops.combine(_, _data)) getOrElse _data
+
+    datas.update(entity.id, data)
 
     // send current clock to avoid unnecessary update sending (from zero to current)
     datahub.register(createFacadeDep(entity))
@@ -71,7 +70,6 @@ class LocalDataStorage[M[_]](log: Logger,
 
   private def combineRelation(entity: Entity)(update: entity.ops.D): entity.ops.D =
     if (relations contains entity.id) {
-      println(("AAAAA", entity, update))
       val current = get(entity).getOrElse(entity.ops.zero)
       val updated = entity.ops.combine(current, update)
 

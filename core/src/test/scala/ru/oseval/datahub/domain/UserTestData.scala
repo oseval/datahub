@@ -1,6 +1,6 @@
 package ru.oseval.datahub.domain
 
-import ru.oseval.datahub.{Entity, EntityFacade}
+import ru.oseval.datahub.{Entity, LocalEntityFacade}
 import ru.oseval.datahub.data.{AIDataOps, Data, SetData}
 
 import scala.concurrent.Future
@@ -14,12 +14,12 @@ case class UserEntity(userId: Long) extends Entity {
   override val ops = UserOps
 }
 
-case class UserEntityFacade(entity: Entity) extends EntityFacade {
+case class UserEntityFacade(entity: Entity) extends LocalEntityFacade {
   /**
     * Request explicit data difference from entity
     *
     * @param dataClock
     * @return
     */
-  override def getUpdatesFrom(dataClock: entity.ops.D#C): Future[entity.ops.D] = ???
+  override def syncData(dataClock: entity.ops.D#C): Unit = ???
 }

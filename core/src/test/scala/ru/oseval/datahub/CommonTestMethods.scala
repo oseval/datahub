@@ -4,43 +4,55 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.{ScheduledThreadPoolExecutor, TimeUnit}
 
 import org.mockito.Mockito.spy
-import ru.oseval.datahub.data.{ALOData, Data}
-import ru.oseval.datahub.domain.ProductTestData.ProductClock
-import ru.oseval.datahub.remote.RemoteDatahub.SubsOps
-import ru.oseval.datahub.remote.{RemoteDatahub, RemoteSubscriber, SubscriptionStorage}
-import ru.oseval.datahub.utils.Commons.Id
+import org.scalatest.mockito.MockitoSugar
+import ru.oseval.datahub.data.{ALOData, Data, DataOps}
+import ru.oseval.datahub.domain.ProductTestData.{ProductClock, ProductEntity, ProductOps}
+import ru.oseval.datahub.remote.RemoteSubscriber.SubsOps
+import ru.oseval.datahub.remote.{RemoteSubscriber, SimpleRemoteFacade, SubscriptionStorage}
+import org.scalatest
+import ru.oseval.datahub.domain.WarehouseTestData.{WarehouseEntity, WarehouseOps}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
-import scala.ref.SoftReference
-import scala.util.Random
+import scala.util.{Random, Try}
 
-trait CommonTestMethods {
+trait CommonTestMethods extends MockitoSugar with scalatest.Matchers {
   protected val log = LoggerFactory.getLogger(getClass)
 
   protected implicit val ec = scala.concurrent.ExecutionContext.global
   protected implicit val timeout = 3.seconds
+
+  DataEntityRegistry.register(ProductOps.kind, { entityId =>
+    ProductEntity(entityId.split('_')(1).toInt)
+  })
+  DataEntityRegistry.register(WarehouseOps.kind, { entityId =>
+    WarehouseEntity(entityId.split('_')(1))
+  })
 
   protected val scheduler = new ScheduledThreadPoolExecutor(1)
   protected def scheduleOnce(delay: Long, f: () => Any): Unit =
     scheduler.schedule(new Runnable {
       override def run(): Unit = f()
     }, delay, TimeUnit.MILLISECONDS)
-//  protected val repeater = Repeater("TestRepeater", RepeaterConfig(500, 5000), scheduleOnce, log)
 
   class WeakTransort {
-    def push[A, B](t: A, f: A => B): B = if (Random.nextLong % 3 == 0) f(t) else throw new RuntimeException("Transport failure for push " + t)
+    def push[A, B](t: A, f: => B): B =
+      if (Random.nextLong % 3 != 0) f
+      else throw new RuntimeException("Transport failure for push " + t)
   }
-  val weakTransort: WeakTransort = new WeakTransort
+  val weakTransport: WeakTransort = new WeakTransort
 
   def inMemoryStorage() = new SubscriptionStorage {
-    override def onUpdate(update: RemoteDatahub.SubsData): Unit = ()
-    override def loadData(): Future[RemoteDatahub.SubsData] = Future.successful(SubsOps.zero.data)
+    override def onUpdate(update: RemoteSubscriber.SubsData): Unit = ()
+    override def loadData(): Future[RemoteSubscriber.SubsData] = Future.successful(SubsOps.zero.data)
   }
 
-  def createDatahub = new AsyncDatahub()(ec)
+  def createDatahub() = new AsyncDatahub()(ec)
 
 
+  class SpiedSubscriber extends Subscriber {
+    override def onUpdate(relation: Entity)(relationData: relation.ops.D): Unit = ()
+  }
 
   class SpiedDatahub extends Datahub {
     override def register(facade: EntityFacade): Unit = ()
@@ -53,45 +65,51 @@ trait CommonTestMethods {
                                     relationClocks: Map[Entity, Any]): Unit = ()
   }
 
+  case class LocalZeroFacade[E <: Entity](entity: E, dh: Datahub) extends LocalEntityFacade {
+    override def syncData(dataClock: entity.ops.D#C): Unit =
+      dh.dataUpdated(entity)(entity.ops.zero)
+  }
+
+  class SpiedRemoteFacade(val ops: DataOps, val datahub: Datahub, rs: => RemoteSubscriber) extends SimpleRemoteFacade {
+    override val subscriptionStorage: SubscriptionStorage = inMemoryStorage()
+    override protected def updateSubscriptions(update: ALOData[RemoteSubscriber.SubsData]): Unit =
+      Try(weakTransport.push("RemoteFacade_updateSubscriptions", rs.onSubscriptionsUpdate(update)))
+
+    override def syncData(entityId: String, dataClock: ops.D#C): Unit = {
+      val entity = DataEntityRegistry.getConstructor(ops.kind)(entityId)
+      weakTransport.push("RemoteFacade_syncData", rs.syncData(entity, dataClock))
+    }
+  }
+
+  class SpiedRemoteSubscriber(val datahub: Datahub, rf: => SimpleRemoteFacade) extends RemoteSubscriber {
+    override protected implicit val ec: ExecutionContext = scala.concurrent.ExecutionContext.global
+
+    override protected def syncSubscriptions(clock: ProductClock): Unit =
+      weakTransport.push("RemoteSubscriber_synSubscriptions", rf.syncSubscriptions(clock))
+    override def onUpdate(relation: Entity)(relationData: relation.ops.D): Unit =
+      Try(weakTransport.push("RemoteSubscriber_onUpdate", rf.onUpdate(relation)(relationData)))
+  }
+
   def spiedDatahub(): Datahub = {
     val datahub = new SpiedDatahub
     spy[SpiedDatahub](datahub)
   }
 
-  def makeLocalStorage(knownData: Map[Entity, Data] = Map.empty): (LocalDataStorage[Id], Datahub) = {
+  def makeLocalStorage(knownData: Map[Entity, Data] = Map.empty): (LocalDataStorage, Datahub) = {
     val datahub = new SpiedDatahub
     val spiedhub = spy[SpiedDatahub](datahub)
-    new LocalDataStorage[Id](LoggerFactory.getLogger(getClass), _ => null, spiedhub, knownData) -> spiedhub
+    new LocalDataStorage(LoggerFactory.getLogger(getClass), _ => null, spiedhub, knownData) -> spiedhub
   }
 
+  def makeRemotes(_ops: DataOps) = {
+    val localDH = spy[AsyncDatahub](new AsyncDatahub())
+    lazy val rf: SpiedRemoteFacade =
+      spy[SpiedRemoteFacade](new SpiedRemoteFacade(_ops, localDH, rs))
 
+    lazy val remoteDH = spy[AsyncDatahub](new AsyncDatahub())
+    lazy val rs: RemoteSubscriber =
+      spy[RemoteSubscriber](new SpiedRemoteSubscriber(remoteDH, rf))
 
-  def makeRemotes() = {
-    lazy val rd: SoftReference[RemoteDatahub] = SoftReference(spy[RemoteDatahub](new RemoteDatahub {
-      override val datahub: Datahub = spiedDatahub()
-      override val subscriptionStorage: SubscriptionStorage = inMemoryStorage()
-      override def updateSubscriptions(update: ALOData[RemoteDatahub.SubsData]): Unit =
-        weakTransort.push(update, rs().onSubscriptionsUpdate)
-
-      override def dataUpdated(entity: Entity)(data: entity.ops.D): Unit =
-        datahub.dataUpdated(entity)(data)
-      override def syncRelationClocks(subscriber: Subscriber, relationClocks: Map[Entity, Any]): Unit =
-        datahub.syncRelationClocks(subscriber, relationClocks)
-    }))
-
-    lazy val rs: SoftReference[RemoteSubscriber] = SoftReference(spy[RemoteSubscriber](new RemoteSubscriber {
-      override val datahub: Datahub = spiedDatahub()
-      override protected implicit val ec: ExecutionContext = ExecutionContext.global
-
-      override protected def getUpdatesFrom(clock: Long): Future[ALOData[RemoteDatahub.SubsData]] = {
-        Future.successful(weakTransort.push(clock, rd().getUpdatesFrom))
-      }
-
-      override def onUpdate(relation: Entity)(relationData: relation.ops.D): Unit = {
-        weakTransort.push((), (_: Unit) => rd().dataUpdated(relation)(relationData))
-      }
-    }))
-
-    rd -> rs
+    (localDH, rf, remoteDH, rs)
   }
 }

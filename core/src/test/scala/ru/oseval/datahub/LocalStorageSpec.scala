@@ -5,9 +5,10 @@ import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mockito.MockitoSugar
 import org.slf4j.LoggerFactory
 import org.mockito.Mockito._
+import ru.oseval.datahub.data.InferredOps.InferredOps
 import ru.oseval.datahub.domain.ProductTestData.{ProductData, ProductEntity, ProductOps}
 import ru.oseval.datahub.domain.WarehouseTestData.{WarehouseData, WarehouseEntity, WarehouseOps}
-import ru.oseval.datahub.data.{ALOData, Data}
+import ru.oseval.datahub.data._
 
 class LocalStorageSpec extends FlatSpecLike
   with MockitoSugar
@@ -20,15 +21,17 @@ class LocalStorageSpec extends FlatSpecLike
   val warehouse2 = WarehouseEntity("2")
 
   val time = System.currentTimeMillis
-  val productData = ALOData(ProductData("p1", 1, 4L))(2L)
+  val productData = ProductData("p1", 1, 4L)
   val productDataTotal = ProductOps.combine(ProductOps.zero, productData)
-  val warehouseData1 = ALOData(WarehouseData(Set(product1.productId), time + 3))(0)
-  val warehouseData2 = warehouseData1.updated(WarehouseData(Set(product2.productId), time + 4))
+  val warehouseData1 = {
+    val productSet = SetData.one(product1.productId, time + 3)
+    ALOData(WarehouseData(productSet))(0)
+  }
+  val warehouseData2 = warehouseData1.updated(WarehouseData(SetData.one(product2.productId, time + 4)))
   val warehouseDataTotal = WarehouseOps.combine(warehouseData1, warehouseData2)
 
   val log = LoggerFactory.getLogger(getClass)
 
-  type Id[T] = T
   class SpiedDatahub extends Datahub {
     override def register(facade: EntityFacade): Unit = ()
     override def subscribe(entity: Entity,
@@ -40,7 +43,7 @@ class LocalStorageSpec extends FlatSpecLike
                                     relationClocks: Map[Entity, Any]): Unit = ()
   }
 
-  def makeStorage(knownData: Map[Entity, Data] = Map.empty): (LocalDataStorage[Id], Datahub) = {
+  def makeStorage(knownData: Map[Entity, Data] = Map.empty): (LocalDataStorage, Datahub) = {
     val datahub = new SpiedDatahub
     val spiedhub = spy[SpiedDatahub](datahub)
     new LocalDataStorage(LoggerFactory.getLogger(getClass), _ => null, spiedhub, knownData) -> spiedhub
@@ -54,25 +57,43 @@ class LocalStorageSpec extends FlatSpecLike
     storage.addEntity(warehouse1)(warehouseData1)
 
     verify(listener).register(
-      null.asInstanceOf[EntityFacade { val entity: warehouse1.type }]
+      null.asInstanceOf[LocalEntityFacade { val entity: warehouse1.type }]
     )
   }
 
-  it should "sync relation when it is not solid" in {
-    storage.onUpdate(product1)(productData)
+  case class WarehouseDependentData(warehouseE: Option[WarehouseEntity], clock: Long) extends Data {
+    override type C = Long
+  }
 
-    storage.checkDataIntegrity shouldBe false
-    verify(listener).syncRelationClocks(storage, Map(product1 -> 0L))
+  object WarehouseDependentDataOps extends InferredOps[WarehouseDependentData](
+    WarehouseDependentData(None, 0L), "wdepdata", InferredOps.timeClockBehavior
+  ) {
+    override def getRelations(data: WarehouseDependentData): (Set[Entity], Set[Entity]) = (data.warehouseE.toSet, Set.empty)
+  }
+
+  case class WarehouseDependentEntity(xid: Int) extends Entity {
+    val ops = WarehouseDependentDataOps
+    override val id: String = ops.kind + "_" + xid
+  }
+
+  it should "sync relation when it is not solid" in {
+    val (s2, dh) = makeStorage()
+    s2.addEntity(WarehouseDependentEntity(5))(WarehouseDependentData(Some(warehouse1), 1L))
+    s2.onUpdate(warehouse1)(warehouseData1.copy[WarehouseData](clock = 2L, previousClock = 1L)) // product is acid - can't be nit solid
+
+    s2.checkDataIntegrity shouldBe false
+    verify(dh).syncRelationClocks(s2, Map(warehouse1 -> 0L))
   }
 
   it should "notify when local entity updated" in {
+    storage.addEntity(product1)(productData)
     storage.combineEntity(warehouse1)(_ => warehouseData2)
 
     verify(listener).dataUpdated(warehouse1)(warehouseData2)
 
     storage.get(warehouse1) shouldBe Some(warehouseDataTotal)
-    storage.get[ALOData[ProductData]](product1.id) shouldBe Some(productDataTotal)
-    storage.get[ALOData[ProductData]](product2.id) shouldBe Some(ProductOps.zero)
+    storage.get(product1) shouldBe Some(productDataTotal)
+    storage.get(product2) shouldBe Some(ProductOps.zero)
   }
 
   it should "subscribe entity on new related entities" in {

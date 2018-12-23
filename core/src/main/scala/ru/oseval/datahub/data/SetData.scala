@@ -17,9 +17,24 @@ object SetDataOps {
     )
 }
 
+object SetData {
+  def one[A, C](element: A, clock: C)(implicit ordering: Ordering[C]) =
+    new SetData(SortedMap(clock -> element), SortedMap.empty)
+
+  def apply[A, C](elements: A*)(clock: C)(increase: C => C)(implicit ordering: Ordering[C]) =
+    new SetData(elements.foldLeft(SortedMap.empty[C, A] -> clock) { case ((m, clk), el) =>
+      m.updated(clk, el) -> increase(clk)
+    }._1, SortedMap.empty[C, A])
+}
+
 case class SetData[+A, Clk](private[data] val added: SortedMap[Clk, A],
                             private[data] val removed: SortedMap[Clk, A]) {
   private lazy val actualMap: SortedMap[Clk, A] = added -- removed.keySet
+  lazy val lastClockOpt = (added.lastOption.map(_._1), removed.lastOption.map(_._1)) match {
+    case (None, clkOpt) => clkOpt
+    case (clkOpt, None) => clkOpt
+    case (Some(clk1), Some(clk2)) => Some(added.ordering.max(clk1, clk2))
+  }
   lazy val elements: Seq[A] = actualMap.values.toList
   lazy val removedElements: Seq[A] = (removed -- actualMap.keySet).values.toList
   def add[B >: A](el: B, newClock: Clk): SetData[B, Clk] =

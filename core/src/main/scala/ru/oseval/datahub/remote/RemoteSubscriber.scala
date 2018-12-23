@@ -9,7 +9,12 @@ import ru.oseval.datahub._
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.{ExecutionContext, Future}
 
-object RemoteDatahub {
+/**
+  * This is one of the remotes interactions parts
+  *
+  * LocalSubscriber -> Datahub -> RemoteFacade - - -> RemoteSubscriber -> Datahub -> LocalFacade
+  */
+object RemoteSubscriber {
   case class SubsData(subs: SetData[(Entity, Any) /** entityId / clock **/, Long],
                       clock: Long
                      ) extends Data {
@@ -23,118 +28,79 @@ object RemoteDatahub {
       "subscriptions"
     )
   }
-}
-import RemoteDatahub._
 
+  trait SubscriptionsManagement { this: Subscriber =>
+    protected implicit val ec: ExecutionContext
+    // TODO: Must it be the SoftReference?
+    protected val datahub: Datahub
 
-trait RemoteSubscriber extends Subscriber {
-  val datahub: Datahub
-  protected implicit val ec: ExecutionContext
-  private val subscriptions: AtomicReference[ALOData[SubsData]] = new AtomicReference(SubsOps.zero)
-  private val pendingSubscriptions: TrieMap[Entity, Boolean] = TrieMap.empty
+    private val subscriptions: AtomicReference[ALOData[SubsData]] = new AtomicReference(SubsOps.zero)
+    private val pendingSubscriptions: TrieMap[Entity, Boolean] = TrieMap.empty
 
-  private def addSubscription(relation: Entity, lastKnownClock: Any): Unit =
-    if (!datahub.subscribe(relation, this, lastKnownClock))
-      pendingSubscriptions.put(relation, true)
+    private def addSubscription(relation: Entity, lastKnownClock: Any): Unit =
+      if (!datahub.subscribe(relation, this, lastKnownClock))
+        pendingSubscriptions.put(relation, true)
 
-  /**
-    * Called from outside subscriber by the remote request
-    * @param clock
-    * @return
-    */
-  protected def getUpdatesFrom(clock: Long): Future[ALOData[SubsData]]
+    protected def syncSubscriptions(clock: Long): Unit
 
-  /**
-    * Calls by external channel provider
-    * @param update
-    */
-  def onSubscriptionsUpdate(update: ALOData[SubsData]): Unit = {
-    val beforeClock = subscriptions.get().clock
-    val newData = subscriptions.accumulateAndGet(update, SubsOps.combine)
-    if (!newData.isSolid) getUpdatesFrom(newData.clock).foreach(onSubscriptionsUpdate)
+    /**
+      * Calls by external channel provider
+      * @param update
+      */
+    def onSubscriptionsUpdate(update: ALOData[SubsData]): Unit = {
+      val beforeClock = subscriptions.get().clock
+      val newData = subscriptions.accumulateAndGet(update, SubsOps.combine)
+      if (!newData.isSolid) syncSubscriptions(newData.clock)
 
-    val realUpdate = SubsOps.diffFromClock(newData, beforeClock)
-    val addedSubscriptions = realUpdate.data.subs.elements
-    val removedSubscriptions = realUpdate.data.subs.removedElements
+      val realUpdate = SubsOps.diffFromClock(newData, beforeClock)
+      val addedSubscriptions = realUpdate.data.subs.elements
+      val removedSubscriptions = realUpdate.data.subs.removedElements
 
-    addedSubscriptions.foreach { case (relation, clock) =>
-      addSubscription(relation, clock)
-    }
+      addedSubscriptions.foreach { case (relation, clock) =>
+        addSubscription(relation, clock)
+      }
 
-    removedSubscriptions.foreach { case (relation, clock) =>
+      removedSubscriptions.foreach { case (relation, clock) =>
         datahub.unsubscribe(relation, this)
+      }
+    }
+
+    /**
+      * Calls of this method must be scheduled with an interval
+      * @return
+      */
+    def checkDataIntegrity: Boolean = {
+      val subscriptionsIsSolid = subscriptions.get().isSolid && subscriptions.get().clock != SubsOps.zero.clock
+
+      syncSubscriptions(subscriptions.get().clock)
+
+      pendingSubscriptions.foreach { case (relation, _) =>
+        if (datahub.subscribe(relation, this, relation.ops.zero.clock)) {
+          pendingSubscriptions -= relation
+        }
+      }
+
+      subscriptionsIsSolid && pendingSubscriptions.isEmpty
     }
   }
+}
+import RemoteSubscriber._
 
+/**
+  * This is one of the remotes interactions parts
+  *
+  * LocalSubscriber -> Datahub -> RemoteFacade - - -> RemoteSubscriber -> Datahub -> LocalFacade
+  */
+trait RemoteSubscriber extends Subscriber with SubscriptionsManagement {
   /**
-    * Calls of this method must be scheduled with an interval
+    * Called from outside by the remote request
+    * @param entity
+    * @param dataClock
     * @return
     */
-  def checkDataIntegrity: Boolean = {
-    if (!subscriptions.get().isSolid) getUpdatesFrom(subscriptions.get().clock)
-
-    pendingSubscriptions.foreach { case (relation, _) =>
-      if (datahub.subscribe(relation, this, relation.ops.zero.clock)) pendingSubscriptions -= relation
-    }
-
-    subscriptions.get().isSolid && pendingSubscriptions.isEmpty
-  }
+  def syncData(entity: Entity, dataClock: Any): Unit =
+    datahub.syncRelationClocks(this, Map(entity -> dataClock))
 }
-
-trait RemoteDatahub extends Datahub {
-  val datahub: Datahub
-
-  /**
-    * Storage to save data in case of local datahub crashed
-    */
-  val subscriptionStorage: SubscriptionStorage
-  val subscriptions = new AtomicReference(SubsOps.zero)
-
-  def updateSubscriptions(update: SubsOps.D): Unit
-
-  override def register(facade: EntityFacade): Unit = datahub.register(facade)
-
-  def getUpdatesFrom(clock: Long): SubsOps.D =
-    SubsOps.diffFromClock(subscriptions.get(), clock)
-
-  override def subscribe(entity: Entity,
-                         subscriber: Subscriber,
-                         lastKnownDataClock: Any
-                        ): Boolean = {
-    subscriptions.accumulateAndGet(SubsOps.zero,  { (_, curData: SubsOps.D) =>
-        val newClock = System.currentTimeMillis
-        val updatedSubs = curData.data.subs.add(entity -> lastKnownDataClock, newClock)
-        val newData = curData.updated(curData.data.copy(subs = updatedSubs, clock = newClock))
-
-        val diff = SubsOps.diffFromClock(newData, curData.clock)
-        updateSubscriptions(diff)
-        subscriptionStorage.onUpdate(newData.data)
-
-        newData
-    })
-
-    datahub.subscribe(entity, subscriber, lastKnownDataClock)
-  }
-
-  override def unsubscribe(entity: Entity, subscriber: Subscriber): Unit = {
-    datahub.unsubscribe(entity, subscriber)
-
-    subscriptions.accumulateAndGet(SubsOps.zero,  { (_, curData: SubsOps.D) =>
-      curData.data.elemMap.get(entity).map { relationClk =>
-        val newClock = System.currentTimeMillis
-        val updatedSubs = curData.data.subs.remove(entity -> relationClk, newClock)
-        val newData = curData.updated(curData.data.copy(subs = updatedSubs, clock = newClock))
-
-        val diff = SubsOps.diffFromClock(newData, curData.clock)
-        updateSubscriptions(diff)
-        subscriptionStorage.onUpdate(newData.data)
-
-        newData
-      }.getOrElse(curData)
-    })
-  }
-}
-
 
 trait SubscriptionStorage {
   /**
