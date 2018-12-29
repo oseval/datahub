@@ -1,6 +1,6 @@
 name := "datahub"
 
-version := "0.2-SNAPSHOT"
+ThisBuild / version := "0.2.1-SNAPSHOT"
 
 scalaVersion := "2.12.4"
 
@@ -22,12 +22,8 @@ val commonSettings = Seq(
   )
 )
 
-lazy val root = (project in file(".")).aggregate(core, examples, datahubJava)
+lazy val root = (project in file("."))
+  .settings(publish := {}, publishLocal := {}, packagedArtifacts := Map.empty)
+  .aggregate(core)
 
 lazy val core = (project in file("core")).settings(commonSettings)
-
-lazy val examples = (project in file("examples"))
-  .dependsOn(core)
-  .settings(commonSettings)
-
-lazy val datahubJava = project in file("datahub-java")
