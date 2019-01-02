@@ -8,9 +8,10 @@ import org.scalatest.mockito.MockitoSugar
 import com.github.oseval.datahub.data.{ALOData, Data, DataOps}
 import com.github.oseval.datahub.domain.ProductTestData.{ProductClock, ProductEntity, ProductOps}
 import com.github.oseval.datahub.remote.RemoteSubscriber.SubsOps
-import com.github.oseval.datahub.remote.{RemoteSubscriber, SimpleRemoteFacade, SubscriptionStorage}
+import com.github.oseval.datahub.remote.{RemoteSubscriber, RemoteFacade}
 import org.scalatest
 import com.github.oseval.datahub.domain.WarehouseTestData.{WarehouseEntity, WarehouseOps}
+import com.github.oseval.datahub.remote.RemoteFacade.SubscriptionStorage
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
@@ -70,7 +71,7 @@ trait CommonTestMethods extends MockitoSugar with scalatest.Matchers {
       dh.dataUpdated(entity)(entity.ops.zero)
   }
 
-  class SpiedRemoteFacade(val ops: DataOps, val datahub: Datahub, rs: => RemoteSubscriber) extends SimpleRemoteFacade {
+  class SpiedRemoteFacade(val ops: DataOps, val datahub: Datahub, rs: => RemoteSubscriber) extends RemoteFacade {
     override val subscriptionStorage: SubscriptionStorage = inMemoryStorage()
     override protected def updateSubscriptions(update: ALOData[RemoteSubscriber.SubsData]): Unit =
       Try(weakTransport.push("RemoteFacade_updateSubscriptions", rs.onSubscriptionsUpdate(update)))
@@ -81,7 +82,7 @@ trait CommonTestMethods extends MockitoSugar with scalatest.Matchers {
     }
   }
 
-  class SpiedRemoteSubscriber(val datahub: Datahub, rf: => SimpleRemoteFacade) extends RemoteSubscriber {
+  class SpiedRemoteSubscriber(val datahub: Datahub, rf: => RemoteFacade) extends RemoteSubscriber {
     override protected implicit val ec: ExecutionContext = scala.concurrent.ExecutionContext.global
 
     override protected def syncSubscriptions(clock: ProductClock): Unit =

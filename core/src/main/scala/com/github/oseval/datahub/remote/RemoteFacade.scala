@@ -4,7 +4,9 @@ import java.util.concurrent.atomic.AtomicReference
 
 import com.github.oseval.datahub.remote.RemoteFacade.SubscriptionsManagement
 import com.github.oseval.datahub.{Datahub, Entity, RemoteEntityFacade, Subscriber}
-import com.github.oseval.datahub.remote.RemoteSubscriber.SubsOps
+import com.github.oseval.datahub.remote.RemoteSubscriber.{SubsData, SubsOps}
+
+import scala.concurrent.Future
 
 /**
   * This is one of the remotes interactions parts
@@ -12,16 +14,36 @@ import com.github.oseval.datahub.remote.RemoteSubscriber.SubsOps
   * LocalSubscriber -> Datahub -> RemoteFacade - - -> RemoteSubscriber -> Datahub -> LocalFacade
   */
 object RemoteFacade {
+  trait SubscriptionStorage {
+    /**
+      * Compose data with a given update and persist it to storage
+      * @param data
+      */
+    def onUpdate(update: SubsData): Unit
+
+    /**
+      * Load data from storage. Should return SubsOps.zero if none.
+      * @return
+      */
+    def loadData(): Future[SubsData]
+  }
+
   trait SubscriptionsManagement { this: RemoteEntityFacade =>
     /**
-      * Storage to save data in case of local datahub crashed
+      * Storage to save data in case of local datahub accidentally crashed.
+      * Doesn't require any saving guarantees or transactions
       */
-    val subscriptionStorage: SubscriptionStorage
+    def subscriptionStorage: SubscriptionStorage
 
     /**
       * Current subscriptions
       */
-    val subscriptions = new AtomicReference(SubsOps.zero)
+    private val subscriptions = new AtomicReference(SubsOps.zero)
+
+    def onSubscriptionsLoaded(subs: SubsOps.D): Unit =
+      subscriptions.accumulateAndGet(subs, { (curData: SubsOps.D, _) =>
+        SubsOps.combine(curData, subs)
+      })
 
     /**
       * Calls by facade when subscriptions are updated
@@ -37,7 +59,7 @@ object RemoteFacade {
                              subscriber: Subscriber,
                              lastKnownDataClock: Any
                             ): Unit =
-      subscriptions.accumulateAndGet(SubsOps.zero,  { (_, curData: SubsOps.D) =>
+      subscriptions.accumulateAndGet(SubsOps.zero,  { (curData: SubsOps.D, _) =>
         val newClock = System.currentTimeMillis
         val updatedSubs = curData.data.subs.add(entity -> lastKnownDataClock, newClock)
         val newData = curData.updated(curData.data.copy(subs = updatedSubs, clock = newClock))
@@ -50,7 +72,7 @@ object RemoteFacade {
       })
 
     override def onUnsubscribe(entity: Entity, subscriber: Subscriber): Unit = {
-      subscriptions.accumulateAndGet(SubsOps.zero,  { (_, curData: SubsOps.D) =>
+      subscriptions.accumulateAndGet(SubsOps.zero,  { (curData: SubsOps.D, _) =>
         curData.data.elemMap.get(entity).map { relationClk =>
           val newClock = System.currentTimeMillis
           val updatedSubs = curData.data.subs.remove(entity -> relationClk, newClock)
@@ -72,7 +94,7 @@ object RemoteFacade {
   *
   * LocalSubscriber -> Datahub -> RemoteFacade - - -> RemoteSubscriber -> Datahub -> LocalFacade
   */
-trait SimpleRemoteFacade extends RemoteEntityFacade with SubscriptionsManagement {
+trait RemoteFacade extends RemoteEntityFacade with SubscriptionsManagement {
   // TODO: Must it be the SoftReference?
   protected val datahub: Datahub
 

@@ -101,17 +101,3 @@ trait RemoteSubscriber extends Subscriber with SubscriptionsManagement {
   def syncData(entity: Entity, dataClock: Any): Unit =
     datahub.syncRelationClocks(this, Map(entity -> dataClock))
 }
-
-trait SubscriptionStorage {
-  /**
-    * Compose data with a given update and persist it to storage
-    * @param data
-    */
-  def onUpdate(update: SubsData): Unit
-
-  /**
-    * Load data from storage
-    * @return
-    */
-  def loadData(): Future[SubsData]
-}
