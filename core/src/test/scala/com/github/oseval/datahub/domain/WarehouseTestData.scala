@@ -13,11 +13,13 @@ object WarehouseTestData {
     override type C = Long
   }
 
-  object WarehouseOps extends ALODataOps[InferredOps[WarehouseData]] {
+  object WarehouseOps extends ALODataOps[InferredOps[WarehouseData]] with OpsWithRelations[ALOData[WarehouseData]] {
+    override def getRelations(data: ALOData[WarehouseData]): (Set[Entity], Set[Entity]) =
+      data.data.products.elements.map(ProductEntity(_): Entity).toSet -> Set.empty[Entity]
+
     override protected val ops: InferredOps[WarehouseData] = InferredOps(
       WarehouseData(SetDataOps.zero[Int, Long]),
-      "warehouse",
-      _.products.elements.map(ProductEntity(_): Entity).toSet -> Set.empty[Entity]
+      "warehouse"
     )
 
     override def diffFromClock(a: ALOData[WarehouseData], from: Long): ALOData[WarehouseData] =

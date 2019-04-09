@@ -30,12 +30,6 @@ trait ALODataOps[AO <: DataOps] extends DataOps {
   override lazy val ordering = ops.ordering
   override lazy val zero: ALOData[ops.D] = ALOData(ops.zero, ops.zero.clock, ops.zero.clock, None)
 
-  override def getRelations(data: D): (Set[Entity], Set[Entity]) = ops.getRelations(data.data)
-//    data.data match {
-//      case Some(d) => ops.getRelations(d)
-//      case None => (Set.empty[Entity], Set.empty[Entity])
-//    }
-
   // TODO: can't be true if it is a partial data - for local storage only. Restrict access to it.
   override def diffFromClock(a: ALOData[A], from: A#C): ALOData[A] =
     if (a.isSolid)

@@ -10,6 +10,7 @@ trait Subscriber {
     * @param relationData
     */
   def onUpdate(relation: Entity)(relationData: relation.ops.D): Unit
+  def onUpdate(relationId: String, relationData: Data): Unit
 }
 
 /**

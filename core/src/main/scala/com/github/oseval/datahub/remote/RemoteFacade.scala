@@ -7,6 +7,7 @@ import com.github.oseval.datahub.{Datahub, Entity, RemoteEntityFacade, Subscribe
 import com.github.oseval.datahub.remote.RemoteSubscriber.{SubsData, SubsOps}
 
 import scala.concurrent.Future
+import scala.ref.WeakReference
 
 /**
   * This is one of the remotes interactions parts
@@ -46,12 +47,15 @@ object RemoteFacade {
       })
 
     /**
-      * Calls by facade when subscriptions are updated
-      * @param entity
-      * @param data
+      * Calls by facade when subscriptions are updated to send diff to RemoteSubscriber
+      * @param update
       */
     protected def updateSubscriptions(update: SubsOps.D): Unit
 
+    /**
+      * Calls from remote to sync subscriptions
+      * @param clock
+      */
     def syncSubscriptions(clock: Long): Unit =
       updateSubscriptions(SubsOps.diffFromClock(subscriptions.get(), clock))
 
@@ -95,15 +99,12 @@ object RemoteFacade {
   * LocalSubscriber -> Datahub -> RemoteFacade - - -> RemoteSubscriber -> Datahub -> LocalFacade
   */
 trait RemoteFacade extends RemoteEntityFacade with SubscriptionsManagement {
-  // TODO: Must it be the SoftReference?
-  protected val datahub: Datahub
-
-  override def syncData(entityId: String, dataClock: ops.D#C): Unit
+  protected val datahub: WeakReference[Datahub]
 
   /**
     * Calls by external connection when data update comes from remote
     * @param entity
     * @param data
     */
-  def onUpdate(entity: Entity)(data: entity.ops.D): Unit = datahub.dataUpdated(entity)(data)
+  def onUpdate(entity: Entity)(data: entity.ops.D): Unit = datahub().dataUpdated(entity)(data)
 }

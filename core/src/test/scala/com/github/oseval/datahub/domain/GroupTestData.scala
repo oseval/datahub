@@ -13,7 +13,7 @@ case class Group(groupId: String,
   override type C = Long
 }
 
-object GroupOpsSimple extends DataOps {
+object GroupOpsSimple extends DataOps with OpsWithRelations[Group] {
   override type D = Group
   override val ordering: Ordering[Long] = Ordering.Long
   override val zero: Group = Group("", None, SetDataOps.zero, SetDataOps.zero)

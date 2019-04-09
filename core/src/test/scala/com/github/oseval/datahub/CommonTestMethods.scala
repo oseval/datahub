@@ -8,13 +8,14 @@ import org.scalatest.mockito.MockitoSugar
 import com.github.oseval.datahub.data.{ALOData, Data, DataOps}
 import com.github.oseval.datahub.domain.ProductTestData.{ProductClock, ProductEntity, ProductOps}
 import com.github.oseval.datahub.remote.RemoteSubscriber.SubsOps
-import com.github.oseval.datahub.remote.{RemoteSubscriber, RemoteFacade}
+import com.github.oseval.datahub.remote.{RemoteFacade, RemoteSubscriber}
 import org.scalatest
 import com.github.oseval.datahub.domain.WarehouseTestData.{WarehouseEntity, WarehouseOps}
 import com.github.oseval.datahub.remote.RemoteFacade.SubscriptionStorage
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
+import scala.ref.WeakReference
 import scala.util.{Random, Try}
 
 trait CommonTestMethods extends MockitoSugar with scalatest.Matchers {
@@ -71,7 +72,7 @@ trait CommonTestMethods extends MockitoSugar with scalatest.Matchers {
       dh.dataUpdated(entity)(entity.ops.zero)
   }
 
-  class SpiedRemoteFacade(val ops: DataOps, val datahub: Datahub, rs: => RemoteSubscriber) extends RemoteFacade {
+  class SpiedRemoteFacade(val ops: DataOps, val datahub: WeakReference[Datahub], rs: => RemoteSubscriber) extends RemoteFacade {
     override val subscriptionStorage: SubscriptionStorage = inMemoryStorage()
     override protected def updateSubscriptions(update: ALOData[RemoteSubscriber.SubsData]): Unit =
       Try(weakTransport.push("RemoteFacade_updateSubscriptions", rs.onSubscriptionsUpdate(update)))
@@ -99,13 +100,13 @@ trait CommonTestMethods extends MockitoSugar with scalatest.Matchers {
   def makeLocalStorage(knownData: Map[Entity, Data] = Map.empty): (LocalDataStorage, Datahub) = {
     val datahub = new SpiedDatahub
     val spiedhub = spy[SpiedDatahub](datahub)
-    new LocalDataStorage(LoggerFactory.getLogger(getClass), _ => null, spiedhub, knownData) -> spiedhub
+    new LocalDataStorage(WeakReference(spiedhub), _ => null, LoggerFactory.getLogger(getClass), (_, _) => (), knownData) -> spiedhub
   }
 
   def makeRemotes(_ops: DataOps) = {
     val localDH = spy[AsyncDatahub](new AsyncDatahub())
     lazy val rf: SpiedRemoteFacade =
-      spy[SpiedRemoteFacade](new SpiedRemoteFacade(_ops, localDH, rs))
+      spy[SpiedRemoteFacade](new SpiedRemoteFacade(_ops, WeakReference(localDH), rs))
 
     lazy val remoteDH = spy[AsyncDatahub](new AsyncDatahub())
     lazy val rs: RemoteSubscriber =

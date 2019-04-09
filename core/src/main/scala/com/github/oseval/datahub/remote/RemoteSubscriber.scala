@@ -25,7 +25,7 @@ object RemoteSubscriber {
   object SubsOps extends ALODataOps[InferredOps[SubsData]] {
     override protected val ops: InferredOps[SubsData] = InferredOps(
       SubsData(SetDataOps.zero[(Entity, Any), Long], 0L),
-      "subscriptions"
+      "subscription"
     )
   }
 

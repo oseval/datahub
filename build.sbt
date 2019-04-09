@@ -24,6 +24,20 @@ val commonSettings = Seq(
 
 lazy val root = (project in file("."))
   .settings(publish := {}, publishLocal := {}, packagedArtifacts := Map.empty)
-  .aggregate(core)
+  .aggregate(core, akka)
 
 lazy val core = (project in file("core")).settings(commonSettings)
+
+val akkaVersion = "2.5.21"
+
+lazy val akka = (project in file("akka"))
+  .settings(commonSettings :+ (
+    libraryDependencies ++= Seq(
+      "com.typesafe.akka" %% "akka-cluster-sharding" % akkaVersion,
+      "com.typesafe.akka" %% "akka-testkit" % akkaVersion % Test,
+      "com.typesafe.akka" %% "akka-multi-node-testkit" % akkaVersion % Test
+    )
+  ))
+  .dependsOn(core)
+  .enablePlugins(MultiJvmPlugin)
+  .configs(MultiJvm)

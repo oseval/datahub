@@ -17,9 +17,7 @@ object AIDataOps {
   * @param relations
   * @tparam A
   */
-abstract class AIDataOps[A](relations: A => (Set[Entity], Set[Entity]) =
-                              (_: A) => (Set.empty[Entity], Set.empty[Entity]))
-  extends DataOps {
+abstract class AIDataOps[A] extends DataOps {
 
   override type D = AIData[A]
   override val ordering: Ordering[Long] = Ordering.Long
@@ -30,9 +28,6 @@ abstract class AIDataOps[A](relations: A => (Set[Entity], Set[Entity]) =
 
   override def diffFromClock(a: D, from: Long): D = a
 
-  override def getRelations(data: D): (Set[Entity], Set[Entity]) =
-    data.data.map(relations) getOrElse (Set.empty, Set.empty)
-
   override def nextClock(current: Long): Long = AIDataOps.nextClock(current)
 }
 
@@ -41,7 +36,7 @@ object AIData {
     AIData(Some(data), clock)
 }
 
-case class AIData[A](data: Option[A] = None, clock: Long = 0L) extends Data {
+case class AIData[A] protected (data: Option[A] = None, clock: Long = 0L) extends Data {
   override type C = Long
   // TODO: implicit clockint of generic type
 //  def updated(update: A): ACIData[A] = ACIData(Some(update), ACIDataOps.nextClock(clock))

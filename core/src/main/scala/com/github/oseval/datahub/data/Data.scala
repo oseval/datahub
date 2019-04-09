@@ -60,12 +60,14 @@ abstract class DataOps {
   def matchClock(clock: Any): Option[D#C] =
     if (clock.getClass == zero.clock.getClass) Some(clock.asInstanceOf[D#C]) else None
 
-  // TODO: store as SetData?
-  def getRelations(data: D): (Set[Entity], Set[Entity])
-
   def approveRelation(data: D, relationId: String): Boolean = true
 
   def widen[T >: this.type <: DataOps]: T = this
+}
+
+trait OpsWithRelations[D] {
+  // TODO: store as SetData?
+  def getRelations(data: D): (Set[Entity], Set[Entity])
 }
 
 object InferredOps {
@@ -83,15 +85,14 @@ object InferredOps {
     override val zero: D = z
     override val ordering: Ordering[D#C] = behavior.ordering
     override def nextClock(current: Dt#C): D#C = behavior.nextClock(current)
-    override def getRelations(data: D): (Set[Entity], Set[Entity]) = (Set.empty, Set.empty)
   }
   def apply[Dt <: Data](z: Dt)(implicit behavior: ImplicitClockBehavior[Dt#C]): InferredOps[Dt] =
-    apply(z, z.getClass.getName, _ => (Set.empty, Set.empty))
+    apply(z, z.getClass.getName)
   def apply[Dt <: Data](empty: Dt, kind: String)(implicit behavior: ImplicitClockBehavior[Dt#C]): InferredOps[Dt] =
-    apply(empty, kind, _ => (Set.empty, Set.empty))
+    new InferredOps[Dt](empty, kind, behavior) {}
   def apply[Dt <: Data](empty: Dt, kind: String, relations: Dt => (Set[Entity], Set[Entity]))
                        (implicit behavior: ImplicitClockBehavior[Dt#C]): InferredOps[Dt] =
-    new InferredOps[Dt](empty, kind, behavior) {
+    new InferredOps[Dt](empty, kind, behavior) with OpsWithRelations[Dt] {
       override def getRelations(data: D): (Set[Entity], Set[Entity]) = relations(data)
     }
 }

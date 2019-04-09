@@ -1,9 +1,10 @@
 package com.github.oseval.datahub
 
+import com.github.oseval.datahub.data.Data
 import org.slf4j.LoggerFactory
 
 import scala.collection.concurrent.TrieMap
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 
 object AsyncDatahub {
   private[datahub] class MemoryInnerStorage {
@@ -48,6 +49,9 @@ class AsyncDatahub()(implicit val ec: ExecutionContext) extends Datahub {
   def dataUpdated(entity: Entity)(data: entity.ops.D): Unit =
     innerStorage.getSubscribers(entity.id).foreach(sendChangeToOne(entity, _)(data))
 
+  def dataUpdated(entityId: String, data: Data): Unit =
+    innerStorage.getSubscribers(entityId).foreach(sendChangeToOne(entityId, _)(data))
+
   def syncRelationClocks(subscriber: Subscriber, relationClocks: Map[Entity, Any]): Unit =
     relationClocks.foreach { case (relation, clock) =>
       innerStorage.facade(relation).foreach(syncData(_, relation, subscriber, Some(clock)))
@@ -56,6 +60,9 @@ class AsyncDatahub()(implicit val ec: ExecutionContext) extends Datahub {
   def sendChangeToOne(entity: Entity, subscriber: Subscriber)
                      (entityData: entity.ops.D): Unit =
     subscriber.onUpdate(entity)(entityData)
+
+  def sendChangeToOne(entityId: String, subscriber: Subscriber)(entityData: Data): Unit =
+    subscriber.onUpdate(entityId, entityData)
 
   def subscribe(entity: Entity,
                 subscriber: Subscriber,
@@ -80,7 +87,7 @@ class AsyncDatahub()(implicit val ec: ExecutionContext) extends Datahub {
     )
 
     // TODO: optimize this on facade level (e.g. store last clock inside global facade entity
-    (entityFacade match {
+    entityFacade match {
       case f: LocalEntityFacade =>
         val ops: f.entity.ops.type = f.entity.ops
         val lastKnownDataClock = lastKnownDataClockOpt.flatMap(ops.matchClock) getOrElse ops.zero.clock
@@ -89,9 +96,7 @@ class AsyncDatahub()(implicit val ec: ExecutionContext) extends Datahub {
         val ops: f.ops.type = f.ops
         val lastKnownDataClock = lastKnownDataClockOpt.flatMap(f.ops.matchClock) getOrElse ops.zero.clock
         f.syncData(entity.id, lastKnownDataClock)
-    })/*.map(d =>
-      entity.ops.matchData(d).foreach(sendChangeToOne(entity, subscriber))
-    )*/
+    }
   }
 
   // TODO: add test

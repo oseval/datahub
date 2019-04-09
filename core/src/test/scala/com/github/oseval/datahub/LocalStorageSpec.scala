@@ -10,6 +10,8 @@ import com.github.oseval.datahub.domain.ProductTestData.{ProductData, ProductEnt
 import com.github.oseval.datahub.domain.WarehouseTestData.{WarehouseData, WarehouseEntity, WarehouseOps}
 import com.github.oseval.datahub.data._
 
+import scala.ref.WeakReference
+
 class LocalStorageSpec extends FlatSpecLike
   with MockitoSugar
   with ScalaFutures
@@ -46,7 +48,7 @@ class LocalStorageSpec extends FlatSpecLike
   def makeStorage(knownData: Map[Entity, Data] = Map.empty): (LocalDataStorage, Datahub) = {
     val datahub = new SpiedDatahub
     val spiedhub = spy[SpiedDatahub](datahub)
-    new LocalDataStorage(LoggerFactory.getLogger(getClass), _ => null, spiedhub, knownData) -> spiedhub
+    new LocalDataStorage(WeakReference(spiedhub), _ => null, LoggerFactory.getLogger(getClass), (_, _) => (), knownData) -> spiedhub
   }
 
   val (storage, listener) = makeStorage()
@@ -67,7 +69,7 @@ class LocalStorageSpec extends FlatSpecLike
 
   object WarehouseDependentDataOps extends InferredOps[WarehouseDependentData](
     WarehouseDependentData(None, 0L), "wdepdata", InferredOps.timeClockBehavior
-  ) {
+  ) with OpsWithRelations[WarehouseDependentData] {
     override def getRelations(data: WarehouseDependentData): (Set[Entity], Set[Entity]) = (data.warehouseE.toSet, Set.empty)
   }
 
@@ -79,7 +81,7 @@ class LocalStorageSpec extends FlatSpecLike
   it should "sync relation when it is not solid" in {
     val (s2, dh) = makeStorage()
     s2.addEntity(WarehouseDependentEntity(5))(WarehouseDependentData(Some(warehouse1), 1L))
-    s2.onUpdate(warehouse1)(warehouseData1.copy[WarehouseData](clock = 2L, previousClock = 1L)) // product is acid - can't be nit solid
+    s2.onUpdate(warehouse1)(warehouseData1.copy[WarehouseData](clock = 2L, previousClock = 1L)) // product is acid - always is solid
 
     s2.checkDataIntegrity shouldBe false
     verify(dh).syncRelationClocks(s2, Map(warehouse1 -> 0L))
