@@ -34,6 +34,6 @@ class SetDataSpec extends FlatSpecLike with Matchers {
     }.toList
 
     val res = (data ++ data).permutations.foldLeft(zeroData)((r, s) => s.fold(zeroData)(_ add _))
-    res.elements shouldBe seedData.filterNot(_ % 3 == 1).toList
+    (res.elements.toSet ++ res.removedElements.toSet - 0) should contain theSameElementsAs seedData.filterNot(_ % 3 == 1).toList
   }
 }

@@ -1,6 +1,6 @@
 package com.github.oseval.datahub.data
 
-import scala.collection.SortedMap
+import scala.collection.{SortedMap, SortedSet}
 
 /**
   * Data to help operating with collections inside at-least-once and eff-once Data wrappers.
@@ -29,7 +29,7 @@ object SetData {
 
 case class SetData[+A, Clk](private[data] val added: SortedMap[Clk, A],
                             private[data] val removed: SortedMap[Clk, A]) {
-  private lazy val actualMap: SortedMap[Clk, A] = added -- removed.keySet
+  private lazy val actualMap: SortedMap[Clk, A] = added.filterNot(t => removed.exists(_._2 == t._2))
   lazy val lastClockOpt = (added.lastOption.map(_._1), removed.lastOption.map(_._1)) match {
     case (None, clkOpt) => clkOpt
     case (clkOpt, None) => clkOpt
@@ -38,14 +38,16 @@ case class SetData[+A, Clk](private[data] val added: SortedMap[Clk, A],
   lazy val elements: Seq[A] = actualMap.values.toList
   lazy val removedElements: Seq[A] = (removed -- actualMap.keySet).values.toList
   def add[B >: A](el: B, newClock: Clk): SetData[B, Clk] =
-    SetData(added + (newClock -> el), removed)
+    SetData(added.updated(newClock, el), removed.filterNot(_._2 == el))
 
   def add[B >: A](sdata: SetData[B, Clk]): SetData[B, Clk] = {
-    val allAdded =  (added -- sdata.removed.keySet) ++ (sdata.added -- removed.keySet)
-    val allRemoved =  (removed -- sdata.added.keySet) ++ (sdata.removed -- added.keySet)
+    val allAdded =  added.filterNot(t => sdata.removed.exists(_._2 == t._2)) ++ sdata.added.filterNot(t => removed.exists(_._2 == t._2))
+    val allRemoved =  removed.filterNot(t => sdata.added.exists(_._2 == t._2)) ++ sdata.removed.filterNot(t => added.exists(_._2 == t._2))
+//    val allAdded =  (added -- sdata.removed.keySet) ++ (sdata.added -- removed.keySet)
+//    val allRemoved =  (removed -- sdata.added.keySet) ++ (sdata.removed -- added.keySet)
     SetData(allAdded, allRemoved)
   }
 
   def remove[B >: A](el: B, newClock: Clk): SetData[B, Clk] =
-    SetData(added, removed.updated(newClock, el))
+    SetData(added.filterNot(_._2 == el), removed.updated(newClock, el))
 }
