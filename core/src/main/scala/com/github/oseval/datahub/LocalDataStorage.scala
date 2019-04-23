@@ -75,7 +75,7 @@ class RelationsManager(weakDatahub: WeakReference[Datahub],
 
   protected def combineRelation(entity: Entity)(update: entity.ops.D): entity.ops.D = {
     val current = get(entity).getOrElse(entity.ops.zero)
-    val updated = entity.ops.combine(current, update)
+    val updated = entity.ops.merge(current, update)
 
     onRelationUpdate(entity, update)
 
@@ -116,7 +116,7 @@ class RelationsManager(weakDatahub: WeakReference[Datahub],
 }
 
 class LocalDataStorage(weakDatahub: WeakReference[Datahub],
-                       createFacade: Entity => LocalEntityFacade,
+                       createSource: Entity => LocalDatasource,
                        log: Logger,
                        onRelationUpdate: (Entity, Data) => Unit,
                        knownData: Map[Entity, Data] = Map.empty)
@@ -124,8 +124,8 @@ class LocalDataStorage(weakDatahub: WeakReference[Datahub],
 
   private val relations = mutable.Map.empty[RelationId, mutable.Set[EntityId]]
 
-  private def createFacadeDep(e: Entity) =
-    createFacade(e).asInstanceOf[LocalEntityFacade { val entity: e.type }]
+  private def createSourceDep(e: Entity) =
+    createSource(e).asInstanceOf[LocalDatasource { val entity: e.type }]
 
   private def subscribeOnRelation(entity: Entity, relation: Entity): Unit = {
     relations.getOrElseUpdate(relation.id, mutable.Set.empty) += entity.id
@@ -144,12 +144,12 @@ class LocalDataStorage(weakDatahub: WeakReference[Datahub],
 
   def addEntity(entity: Entity)(_data: entity.ops.D): Unit = {
     entities.update(entity.id, entity)
-    val data: entity.ops.D = get(entity).map(entity.ops.combine(_, _data)) getOrElse _data
+    val data: entity.ops.D = get(entity).map(entity.ops.merge(_, _data)) getOrElse _data
 
     datas.update(entity.id, data)
 
     // send current clock to avoid unnecessary update sending (from zero to current)
-    datahub.register(createFacadeDep(entity))
+    datahub.register(createSourceDep(entity))
 
     entity.ops match {
       case ops: OpsWithRelations[entity.ops.D @unchecked] =>
@@ -195,7 +195,7 @@ class LocalDataStorage(weakDatahub: WeakReference[Datahub],
                    (upd: entity.ops.D#C => entity.ops.D): Unit = {
     val curData = get(entity).getOrElse(entity.ops.zero)
     val dataUpdate = upd(entity.ops.nextClock(curData.clock))
-    val updatedData = entity.ops.combine(curData, dataUpdate)
+    val updatedData = entity.ops.merge(curData, dataUpdate)
 
     applyEntityUpdate(entity)(curData, dataUpdate, updatedData)
   }

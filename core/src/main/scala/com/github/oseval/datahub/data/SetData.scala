@@ -40,6 +40,12 @@ case class SetData[+A, Clk](private[data] val added: SortedMap[Clk, A],
   def add[B >: A](el: B, newClock: Clk): SetData[B, Clk] =
     SetData(added + (newClock -> el), removed)
 
+  def add[B >: A](sdata: SetData[B, Clk]): SetData[B, Clk] = {
+    val allAdded =  (added -- sdata.removed.keySet) ++ (sdata.added -- removed.keySet)
+    val allRemoved =  (removed -- sdata.added.keySet) ++ (sdata.removed -- added.keySet)
+    SetData(allAdded, allRemoved)
+  }
+
   def remove[B >: A](el: B, newClock: Clk): SetData[B, Clk] =
     SetData(added, removed.updated(newClock, el))
 }

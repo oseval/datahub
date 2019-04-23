@@ -8,12 +8,12 @@ import org.scalatest.mockito.MockitoSugar
 import com.github.oseval.datahub.data.{ALOData, Data, DataOps}
 import com.github.oseval.datahub.domain.ProductTestData.{ProductClock, ProductEntity, ProductOps}
 import com.github.oseval.datahub.remote.RemoteSubscriber.SubsOps
-import com.github.oseval.datahub.remote.{RemoteFacade, RemoteSubscriber}
+import com.github.oseval.datahub.remote.{RemoteDatasourceConnector, RemoteSubscriber}
 import org.scalatest
 import com.github.oseval.datahub.domain.WarehouseTestData.{WarehouseEntity, WarehouseOps}
-import com.github.oseval.datahub.remote.RemoteFacade.SubscriptionStorage
+import com.github.oseval.datahub.remote.RemoteDatasource.SubscriptionStorage
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.ref.WeakReference
 import scala.util.{Random, Try}
@@ -54,42 +54,46 @@ trait CommonTestMethods extends MockitoSugar with scalatest.Matchers {
 
   class SpiedSubscriber extends Subscriber {
     override def onUpdate(relation: Entity)(relationData: relation.ops.D): Unit = ()
+    override def onUpdate(relationId: String , relationData: Data): Unit = ()
   }
 
   class SpiedDatahub extends Datahub {
-    override def register(facade: EntityFacade): Unit = ()
+    override def register(source: Datasource): Unit = ()
     override def subscribe(entity: Entity,
                            subscriber: Subscriber,
                            lastKnownDataClock: Any): Boolean = true
     override def unsubscribe(entity: Entity, subscriber: Subscriber): Unit = ()
     override def dataUpdated(entity: Entity)(data: entity.ops.D): Unit = ()
+    override def dataUpdated(entityId: String, data: Data): Unit = ()
     override def syncRelationClocks(entity: Subscriber,
                                     relationClocks: Map[Entity, Any]): Unit = ()
   }
 
-  case class LocalZeroFacade[E <: Entity](entity: E, dh: Datahub) extends LocalEntityFacade {
+  case class LocalZeroDatasource[E <: Entity](entity: E, dh: Datahub) extends LocalDatasource {
     override def syncData(dataClock: entity.ops.D#C): Unit =
       dh.dataUpdated(entity)(entity.ops.zero)
   }
 
-  class SpiedRemoteFacade(val ops: DataOps, val datahub: WeakReference[Datahub], rs: => RemoteSubscriber) extends RemoteFacade {
+  class SpiedRemoteDatasourceConnector(val ops: DataOps,
+                                       val datahub: WeakReference[Datahub],
+                                       rs: => RemoteSubscriber) extends RemoteDatasourceConnector {
     override val subscriptionStorage: SubscriptionStorage = inMemoryStorage()
     override protected def updateSubscriptions(update: ALOData[RemoteSubscriber.SubsData]): Unit =
-      Try(weakTransport.push("RemoteFacade_updateSubscriptions", rs.onSubscriptionsUpdate(update)))
+      Try(weakTransport.push("RemoteDatasource_updateSubscriptions", rs.onSubscriptionsUpdate(update)))
 
     override def syncData(entityId: String, dataClock: ops.D#C): Unit = {
       val entity = DataEntityRegistry.getConstructor(ops.kind)(entityId)
-      weakTransport.push("RemoteFacade_syncData", rs.syncData(entity, dataClock))
+      weakTransport.push("RemoteDatasource_syncData", rs.syncData(entity, dataClock))
     }
   }
 
-  class SpiedRemoteSubscriber(val datahub: Datahub, rf: => RemoteFacade) extends RemoteSubscriber {
-    override protected implicit val ec: ExecutionContext = scala.concurrent.ExecutionContext.global
-
+  class SpiedRemoteSubscriber(val datahub: Datahub, rf: => RemoteDatasourceConnector) extends RemoteSubscriber {
     override protected def syncSubscriptions(clock: ProductClock): Unit =
       weakTransport.push("RemoteSubscriber_synSubscriptions", rf.syncSubscriptions(clock))
+    override def onUpdate(relationId: String, relationData: Data): Unit =
+      Try(weakTransport.push("RemoteSubscriber_onUpdate", rf.onUpdate(relationId, relationData)))
     override def onUpdate(relation: Entity)(relationData: relation.ops.D): Unit =
-      Try(weakTransport.push("RemoteSubscriber_onUpdate", rf.onUpdate(relation)(relationData)))
+      onUpdate(relation.id, relationData)
   }
 
   def spiedDatahub(): Datahub = {
@@ -105,8 +109,8 @@ trait CommonTestMethods extends MockitoSugar with scalatest.Matchers {
 
   def makeRemotes(_ops: DataOps) = {
     val localDH = spy[AsyncDatahub](new AsyncDatahub())
-    lazy val rf: SpiedRemoteFacade =
-      spy[SpiedRemoteFacade](new SpiedRemoteFacade(_ops, WeakReference(localDH), rs))
+    lazy val rf: SpiedRemoteDatasourceConnector =
+      spy[SpiedRemoteDatasourceConnector](new SpiedRemoteDatasourceConnector(_ops, WeakReference(localDH), rs))
 
     lazy val remoteDH = spy[AsyncDatahub](new AsyncDatahub())
     lazy val rs: RemoteSubscriber =

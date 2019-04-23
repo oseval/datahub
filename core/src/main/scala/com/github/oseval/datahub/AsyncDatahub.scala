@@ -9,17 +9,17 @@ import scala.concurrent.ExecutionContext
 object AsyncDatahub {
   private[datahub] class MemoryInnerStorage {
     private val trieSetEmpty: TrieMap[Subscriber, Boolean] = TrieMap.empty[Subscriber, Boolean]
-    private val facades: TrieMap[String, LocalEntityFacade] =
-      TrieMap.empty[String, LocalEntityFacade]
-    private val remoteFacades: TrieMap[String, RemoteEntityFacade] =
-      TrieMap.empty[String, RemoteEntityFacade]
+    private val sources: TrieMap[String, LocalDatasource] =
+      TrieMap.empty[String, LocalDatasource]
+    private val remoteSources: TrieMap[String, RemoteDatasource] =
+      TrieMap.empty[String, RemoteDatasource]
     private val subscribers: TrieMap[String, TrieMap[Subscriber, Boolean]] =
-      TrieMap.empty[String, TrieMap[Subscriber, Boolean]] // facade -> subscribers
+      TrieMap.empty[String, TrieMap[Subscriber, Boolean]] // source -> subscribers
 
-    def facade(entity: Entity): Option[EntityFacade] = facades.get(entity.id).orElse(remoteFacades.get(entity.ops.kind))
-    def registerFacade(entityFacade: EntityFacade): Unit = entityFacade match {
-      case f: LocalEntityFacade => facades.put(f.entity.id, f)
-      case f: RemoteEntityFacade => remoteFacades.put(f.ops.kind, f)
+    def source(entity: Entity): Option[Datasource] = sources.get(entity.id).orElse(remoteSources.get(entity.ops.kind))
+    def registerSource(entitySource: Datasource): Unit = entitySource match {
+      case s: LocalDatasource => sources.put(s.entity.id, s)
+      case s: RemoteDatasource => remoteSources.put(s.ops.kind, s)
     }
 
     def getSubscribers(entityId: String): Set[Subscriber] =
@@ -43,8 +43,8 @@ class AsyncDatahub()(implicit val ec: ExecutionContext) extends Datahub {
   protected val innerStorage = new MemoryInnerStorage
   protected val log = LoggerFactory.getLogger(getClass)
 
-  override def register(facade: EntityFacade): Unit =
-    innerStorage.registerFacade(facade)
+  override def register(source: Datasource): Unit =
+    innerStorage.registerSource(source)
 
   def dataUpdated(entity: Entity)(data: entity.ops.D): Unit =
     innerStorage.getSubscribers(entity.id).foreach(sendChangeToOne(entity, _)(data))
@@ -54,7 +54,7 @@ class AsyncDatahub()(implicit val ec: ExecutionContext) extends Datahub {
 
   def syncRelationClocks(subscriber: Subscriber, relationClocks: Map[Entity, Any]): Unit =
     relationClocks.foreach { case (relation, clock) =>
-      innerStorage.facade(relation).foreach(syncData(_, relation, subscriber, Some(clock)))
+      innerStorage.source(relation).foreach(syncData(_, relation, subscriber, Some(clock)))
     }
 
   def sendChangeToOne(entity: Entity, subscriber: Subscriber)
@@ -67,17 +67,17 @@ class AsyncDatahub()(implicit val ec: ExecutionContext) extends Datahub {
   def subscribe(entity: Entity,
                 subscriber: Subscriber,
                 lastKnownDataClock: Any): Boolean = {
-    log.debug("subscribe {}, {}, {}", subscriber, entity.id, innerStorage.facade(entity))
+    log.debug("subscribe {}, {}, {}", subscriber, entity.id, innerStorage.source(entity))
 
     innerStorage.addSubscriber(entity.id, subscriber)
 
-    innerStorage.facade(entity).map { f =>
-      f match { case rem: RemoteEntityFacade => rem.onSubscribe(entity, subscriber, lastKnownDataClock) case _ => }
-      syncData(f, entity, subscriber, Some(lastKnownDataClock))
+    innerStorage.source(entity).map { s =>
+      s match { case rem: RemoteDatasource => rem.onSubscribe(entity, subscriber, lastKnownDataClock) case _ => }
+      syncData(s, entity, subscriber, Some(lastKnownDataClock))
     }.isDefined
   }
 
-  protected def syncData(entityFacade: EntityFacade,
+  protected def syncData(entitySource: Datasource,
                          entity: Entity,
                          subscriber: Subscriber,
                          lastKnownDataClockOpt: Option[Any]): Unit = {
@@ -86,13 +86,13 @@ class AsyncDatahub()(implicit val ec: ExecutionContext) extends Datahub {
       Seq(entity.id, lastKnownDataClockOpt)
     )
 
-    // TODO: optimize this on facade level (e.g. store last clock inside global facade entity
-    entityFacade match {
-      case f: LocalEntityFacade =>
+    // TODO: optimize this on datasource level (e.g. store last clock inside global datasource entity
+    entitySource match {
+      case f: LocalDatasource =>
         val ops: f.entity.ops.type = f.entity.ops
         val lastKnownDataClock = lastKnownDataClockOpt.flatMap(ops.matchClock) getOrElse ops.zero.clock
         f.syncData(lastKnownDataClock)
-      case f: RemoteEntityFacade =>
+      case f: RemoteDatasource =>
         val ops: f.ops.type = f.ops
         val lastKnownDataClock = lastKnownDataClockOpt.flatMap(f.ops.matchClock) getOrElse ops.zero.clock
         f.syncData(entity.id, lastKnownDataClock)

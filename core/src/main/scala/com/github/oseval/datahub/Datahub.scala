@@ -19,11 +19,12 @@ trait Subscriber {
   * @tparam M
   */
 trait Datahub {
-  def register(facade: EntityFacade): Unit
+  def register(source: Datasource): Unit
   def subscribe(entity: Entity,
                 subscriber: Subscriber,
                 lastKnownDataClock: Any): Boolean
   def unsubscribe(entity: Entity, subscriber: Subscriber): Unit
   def dataUpdated(entity: Entity)(data: entity.ops.D): Unit
+  def dataUpdated(entityId: String, data: Data): Unit
   def syncRelationClocks(subscriber: Subscriber, relationClocks: Map[Entity, Any]): Unit
 }

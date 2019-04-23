@@ -28,8 +28,8 @@ class DataUsageSpec extends FlatSpecLike
     private def withFlaw[T](f: () => T): T =
       if (Random.nextInt % 2 == 1) throw new Exception("Datahub call was flawed")
       else f()
-    override def register(facade: EntityFacade): Unit =
-      withFlaw(() => super.register(facade))
+    override def register(source: Datasource): Unit =
+      withFlaw(() => super.register(source))
     override def dataUpdated(entity: Entity)(data: entity.ops.D): Unit =
       withFlaw(() => super.dataUpdated(entity)(data))
     override def subscribe(entity: Entity, // this must be entity to get ops and compare clocks

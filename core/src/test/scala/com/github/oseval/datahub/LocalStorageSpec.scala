@@ -24,23 +24,24 @@ class LocalStorageSpec extends FlatSpecLike
 
   val time = System.currentTimeMillis
   val productData = ProductData("p1", 1, 4L)
-  val productDataTotal = ProductOps.combine(ProductOps.zero, productData)
+  val productDataTotal = ProductOps.merge(ProductOps.zero, productData)
   val warehouseData1 = {
     val productSet = SetData.one(product1.productId, time + 3)
     ALOData(WarehouseData(productSet))(0)
   }
   val warehouseData2 = warehouseData1.updated(WarehouseData(SetData.one(product2.productId, time + 4)))
-  val warehouseDataTotal = WarehouseOps.combine(warehouseData1, warehouseData2)
+  val warehouseDataTotal = WarehouseOps.merge(warehouseData1, warehouseData2)
 
   val log = LoggerFactory.getLogger(getClass)
 
   class SpiedDatahub extends Datahub {
-    override def register(facade: EntityFacade): Unit = ()
+    override def register(source: Datasource): Unit = ()
     override def subscribe(entity: Entity,
                            subscriber: Subscriber,
                            lastKnownDataClock: Any): Boolean = true
     override def unsubscribe(entity: Entity, subscriber: Subscriber): Unit = ()
     override def dataUpdated(entity: Entity)(data: entity.ops.D): Unit = ()
+    override def dataUpdated(entityId: String, data: Data): Unit = ()
     override def syncRelationClocks(entity: Subscriber,
                                     relationClocks: Map[Entity, Any]): Unit = ()
   }
@@ -59,7 +60,7 @@ class LocalStorageSpec extends FlatSpecLike
     storage.addEntity(warehouse1)(warehouseData1)
 
     verify(listener).register(
-      null.asInstanceOf[LocalEntityFacade { val entity: warehouse1.type }]
+      null.asInstanceOf[LocalDatasource { val entity: warehouse1.type }]
     )
   }
 

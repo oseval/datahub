@@ -7,12 +7,11 @@ import com.github.oseval.datahub.data._
 import com.github.oseval.datahub._
 
 import scala.collection.concurrent.TrieMap
-import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * This is one of the remotes interactions parts
   *
-  * LocalSubscriber -> Datahub -> RemoteFacade - - -> RemoteSubscriber -> Datahub -> LocalFacade
+  * LocalSubscriber -> Datahub -> RemoteDatasource - - -> RemoteSubscriber -> Datahub -> LocalDatasource
   */
 object RemoteSubscriber {
   case class SubsData(subs: SetData[(Entity, Any) /** entityId / clock **/, Long],
@@ -30,7 +29,6 @@ object RemoteSubscriber {
   }
 
   trait SubscriptionsManagement { this: Subscriber =>
-    protected implicit val ec: ExecutionContext
     // TODO: Must it be the SoftReference?
     protected val datahub: Datahub
 
@@ -49,7 +47,7 @@ object RemoteSubscriber {
       */
     def onSubscriptionsUpdate(update: ALOData[SubsData]): Unit = {
       val beforeClock = subscriptions.get().clock
-      val newData = subscriptions.accumulateAndGet(update, SubsOps.combine)
+      val newData = subscriptions.accumulateAndGet(update, SubsOps.merge)
       if (!newData.isSolid) syncSubscriptions(newData.clock)
 
       val realUpdate = SubsOps.diffFromClock(newData, beforeClock)
@@ -89,7 +87,7 @@ import RemoteSubscriber._
 /**
   * This is one of the remotes interactions parts
   *
-  * LocalSubscriber -> Datahub -> RemoteFacade - - -> RemoteSubscriber -> Datahub -> LocalFacade
+  * LocalSubscriber -> Datahub -> RemoteDatasource - - -> RemoteSubscriber -> Datahub -> LocalDatasource
   */
 trait RemoteSubscriber extends Subscriber with SubscriptionsManagement {
   /**

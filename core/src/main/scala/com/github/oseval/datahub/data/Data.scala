@@ -1,6 +1,6 @@
 package com.github.oseval.datahub.data
 
-import com.github.oseval.datahub.{Entity, LocalEntityFacade}
+import com.github.oseval.datahub.Entity
 
 /**
   * Idempotent (due to [[Data.clock]] and commutative (due to [[DataOps.ordering]]) data model.
@@ -32,12 +32,12 @@ abstract class DataOps {
   val zero: D
 
   /**
-    * Combines two data objects to one
+    * Merges two data objects to one
     * @param a
     * @param b
     * @return
     */
-  def combine(a: D, b: D): D =
+  def merge(a: D, b: D): D =
     if (ordering.gt(a.clock, b.clock)) a else b
 
   /**
@@ -59,10 +59,6 @@ abstract class DataOps {
 
   def matchClock(clock: Any): Option[D#C] =
     if (clock.getClass == zero.clock.getClass) Some(clock.asInstanceOf[D#C]) else None
-
-  def approveRelation(data: D, relationId: String): Boolean = true
-
-  def widen[T >: this.type <: DataOps]: T = this
 }
 
 trait OpsWithRelations[D] {

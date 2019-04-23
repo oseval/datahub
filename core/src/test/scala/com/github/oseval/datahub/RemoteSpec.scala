@@ -26,7 +26,7 @@ class RemoteSpec extends FlatSpecLike with CommonTestMethods with Eventually wit
   behavior of "Remote datahub"
 
   /**
-    * LocalSubscriber -> Datahub -> RemoteFacade - - -> RemoteSubscriber -> Datahub -> LocalFacade
+    * LocalSubscriber -> Datahub -> RemoteDatasource - - -> RemoteSubscriber -> Datahub -> LocalDatasource
     */
 
   it should "subscribe on remote" in {
@@ -34,13 +34,13 @@ class RemoteSpec extends FlatSpecLike with CommonTestMethods with Eventually wit
   }
 
   it should "replicate data consistently" in {
-    val (clientDH, clientFacade, serverDH, serverSubscriber, subs, _) = subscriberOnRemote(warehouse1)
+    val (clientDH, clientSource, serverDH, serverSubscriber, subs, _) = subscriberOnRemote(warehouse1)
 
     // This update will be sent to the client from the server
     val update = WarehouseOps.diffFromClock(warehouseData2, warehouseData1.clock)
     eventually {
       serverDH.dataUpdated(warehouse1)(update)
-      verify(subs, atLeastOnce()).onUpdate(warehouse1)(update)
+      verify(subs, atLeastOnce()).onUpdate(warehouse1.id, update)
     }
 
     eventually {
@@ -51,31 +51,31 @@ class RemoteSpec extends FlatSpecLike with CommonTestMethods with Eventually wit
   }
 
   private def subscriberOnRemote[E <: Entity](entity: E) = {
-    val (clientDH, clientFacade, serverDH, serverSubscriber) = makeRemotes(entity.ops)
+    val (clientDH, clientSource, serverDH, serverSubscriber) = makeRemotes(entity.ops)
 
     val subs = spy[Subscriber](new SpiedSubscriber)
-    val localZeroFacade = spy[LocalZeroFacade[E]](LocalZeroFacade(entity, clientDH))
+    val localZeroSource = spy[LocalZeroDatasource[E]](LocalZeroDatasource(entity, clientDH))
 
-    // register the Entity facade to make it possible to subscribe on Product
+    // register the Entity datasource to make it possible to subscribe on Product
     // this method doesn't interact with the weak transport
-    serverDH.register(localZeroFacade)
+    serverDH.register(localZeroSource)
 
-    // Register remote client facade which will subscribe on remote entities
+    // Register remote client datasource which will subscribe on remote entities
     // this method doesn't interact with the weak transport
-    clientDH.register(clientFacade)
+    clientDH.register(clientSource)
 
-    // Subscribe local subscriber on Entity - add subscription to the Remote client facade state
+    // Subscribe local subscriber on Entity - add subscription to the Remote client datasource state
     // This state synchronized by the Remote server subscriber checkDataIntegrity method
     // this call interacts with the weak transport
     Try(clientDH.subscribe(entity, subs, entity.ops.zero.clock))
 
-    // waiting while subscriptions from the Remote client facade will be fully replicated to the Remote server subscriber
+    // waiting while subscriptions from the Remote client datasource will be fully replicated to the Remote server subscriber
     eventually(serverSubscriber.checkDataIntegrity shouldBe true)
     verify(serverSubscriber, atLeastOnce()).onSubscriptionsUpdate(any())
 
     // When subscriptions are fully synchronized then the Remote server subscriber is subscribed on the Product
     verify(serverDH, atLeastOnce()).subscribe(entity, serverSubscriber, entity.ops.zero.clock)
 
-    (clientDH, clientFacade, serverDH, serverSubscriber, subs, localZeroFacade)
+    (clientDH, clientSource, serverDH, serverSubscriber, subs, localZeroSource)
   }
 }

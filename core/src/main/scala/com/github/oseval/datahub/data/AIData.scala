@@ -1,7 +1,5 @@
 package com.github.oseval.datahub.data
 
-import com.github.oseval.datahub.Entity
-
 /**
   * Data which are associative and idempotent
   */
@@ -23,7 +21,7 @@ abstract class AIDataOps[A] extends DataOps {
   override val ordering: Ordering[Long] = Ordering.Long
   override val zero: D = AIData()
 
-  override def combine(a: D, b: D): D =
+  override def merge(a: D, b: D): D =
     if (a.clock > b.clock) a else b
 
   override def diffFromClock(a: D, from: Long): D = a
@@ -38,6 +36,5 @@ object AIData {
 
 case class AIData[A] protected (data: Option[A] = None, clock: Long = 0L) extends Data {
   override type C = Long
-  // TODO: implicit clockint of generic type
-//  def updated(update: A): ACIData[A] = ACIData(Some(update), ACIDataOps.nextClock(clock))
+  def updated(update: A): AIData[A] = AIData(Some(update), AIDataOps.nextClock(clock))
 }

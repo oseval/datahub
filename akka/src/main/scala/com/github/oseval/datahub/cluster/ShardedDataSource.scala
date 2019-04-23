@@ -4,7 +4,7 @@ import akka.actor.{Actor, ActorRef, ActorSystem, Props, Timers}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import com.github.oseval.datahub.cluster.ActorDatasource._
 import com.github.oseval.datahub.data.{Data, DataOps}
-import com.github.oseval.datahub.{Entity, RemoteEntityFacade, Subscriber}
+import com.github.oseval.datahub.{Entity, RemoteDatasource, Subscriber}
 
 import scala.collection.mutable
 
@@ -90,7 +90,7 @@ private class DataSourceSubscriptionsActor extends Actor {
   */
 abstract class ShardedDataSource(shardedDataRegion: ActorRef, val ops: DataOps, onDataUpdate: (String, Data) => Unit)
                                 (implicit system: ActorSystem)
-  extends RemoteEntityFacade {
+  extends RemoteDatasource {
 
   private val impl: ActorRef =
     system.actorOf(Props(classOf[ShardedDataSourceActor], onDataUpdate), ops.kind + "_datasource")

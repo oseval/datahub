@@ -1,9 +1,6 @@
 package com.github.oseval.datahub
 
-import com.github.oseval.datahub.data.{Data, DataOps}
-
-import scala.concurrent.Future
-import scala.concurrent.duration.FiniteDuration
+import com.github.oseval.datahub.data.DataOps
 
 trait Entity {
   val id: String
@@ -15,28 +12,28 @@ trait Entity {
   lazy val lift: Entity = this
 }
 
-sealed trait EntityFacade
+sealed trait Datasource
 
-trait LocalEntityFacade extends EntityFacade {
+trait LocalDatasource extends Datasource {
   val entity: Entity
 
   /**
-    * Request explicit data difference from entity to force data syncing
-    * Facade should send data update (from a given clock) to the datahub as reaction on call of this method
-    * In other case data will be synced only after next data update
+    * Request explicit data difference from entity to force data syncing.
+    * Datasource should send data update (from a given clock) to the datahub as reaction on call of this method.
+    * In other case data will be synced only after next data update.
     * @param dataClock
     * @return
     */
   def syncData(dataClock: entity.ops.D#C): Unit
 }
 
-trait RemoteEntityFacade extends EntityFacade {
+trait RemoteDatasource extends Datasource {
   val ops: DataOps
 
   /**
-    * Request explicit data difference from entity to force data syncing
-    * Facade should sync data with remote (from a given clock) as reaction on call of this method
-    * In other case data will be synced only after next data update
+    * Request explicit data difference from entity to force data syncing.
+    * Datasource should sync data with remote (from a given clock) as reaction on call of this method.
+    * In other case data will be synced only after next data update.
     * @param dataClock
     * @return
     */

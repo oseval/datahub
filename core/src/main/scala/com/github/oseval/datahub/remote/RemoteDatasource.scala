@@ -2,8 +2,9 @@ package com.github.oseval.datahub.remote
 
 import java.util.concurrent.atomic.AtomicReference
 
-import com.github.oseval.datahub.remote.RemoteFacade.SubscriptionsManagement
-import com.github.oseval.datahub.{Datahub, Entity, RemoteEntityFacade, Subscriber}
+import com.github.oseval.datahub.data.Data
+import com.github.oseval.datahub.remote.RemoteDatasource.SubscriptionsManagement
+import com.github.oseval.datahub.{Datahub, Entity, RemoteDatasource, Subscriber}
 import com.github.oseval.datahub.remote.RemoteSubscriber.{SubsData, SubsOps}
 
 import scala.concurrent.Future
@@ -12,9 +13,9 @@ import scala.ref.WeakReference
 /**
   * This is one of the remotes interactions parts
   *
-  * LocalSubscriber -> Datahub -> RemoteFacade - - -> RemoteSubscriber -> Datahub -> LocalFacade
+  * LocalSubscriber -> Datahub -> RemoteDatasource - - -> RemoteSubscriber -> Datahub -> LocalDatasource
   */
-object RemoteFacade {
+object RemoteDatasource {
   trait SubscriptionStorage {
     /**
       * Compose data with a given update and persist it to storage
@@ -29,7 +30,7 @@ object RemoteFacade {
     def loadData(): Future[SubsData]
   }
 
-  trait SubscriptionsManagement { this: RemoteEntityFacade =>
+  trait SubscriptionsManagement { this: RemoteDatasource =>
     /**
       * Storage to save data in case of local datahub accidentally crashed.
       * Doesn't require any saving guarantees or transactions
@@ -43,11 +44,11 @@ object RemoteFacade {
 
     def onSubscriptionsLoaded(subs: SubsOps.D): Unit =
       subscriptions.accumulateAndGet(subs, { (curData: SubsOps.D, _) =>
-        SubsOps.combine(curData, subs)
+        SubsOps.merge(curData, subs)
       })
 
     /**
-      * Calls by facade when subscriptions are updated to send diff to RemoteSubscriber
+      * Calls by source when subscriptions are updated to send diff to RemoteSubscriber
       * @param update
       */
     protected def updateSubscriptions(update: SubsOps.D): Unit
@@ -96,9 +97,9 @@ object RemoteFacade {
 /**
   * This is one of the remotes interactions parts
   *
-  * LocalSubscriber -> Datahub -> RemoteFacade - - -> RemoteSubscriber -> Datahub -> LocalFacade
+  * LocalSubscriber -> Datahub -> RemoteDatasource - - -> RemoteSubscriber -> Datahub -> LocalDatasource
   */
-trait RemoteFacade extends RemoteEntityFacade with SubscriptionsManagement {
+trait RemoteDatasourceConnector extends RemoteDatasource with SubscriptionsManagement {
   protected val datahub: WeakReference[Datahub]
 
   /**
@@ -106,5 +107,6 @@ trait RemoteFacade extends RemoteEntityFacade with SubscriptionsManagement {
     * @param entity
     * @param data
     */
-  def onUpdate(entity: Entity)(data: entity.ops.D): Unit = datahub().dataUpdated(entity)(data)
+  def onUpdate(entityId: String, data: Data): Unit =
+    datahub().dataUpdated(entityId, data)
 }

@@ -22,39 +22,39 @@ class AsyncDatahubSpec extends FlatSpecLike
   behavior of "Datahub"
 
   it should "register data entities" in {
-    val facade = mock[LocalEntityFacade]
+    val datasource = mock[LocalDatasource]
     val datahub = createDatahub
 
-    when(facade.entity).thenReturn(ProductEntity(1))
+    when(datasource.entity).thenReturn(ProductEntity(1))
 
-    datahub.register(facade)
+    datahub.register(datasource)
   }
 
   it should "subscribe on related data entities" in {
     val datahub = createDatahub()
 
     val product = ProductEntity(1)
-    val productFacade = mock[LocalEntityFacade { val entity: product.type }]
-    when(productFacade.entity).thenReturn(product)
+    val productSource = mock[LocalDatasource { val entity: product.type }]
+    when(productSource.entity).thenReturn(product)
     val productData = ProductOps.zero
 
     val newProductData = ProductData("TV", 1, System.currentTimeMillis)
 
     val subscriber = mock[Subscriber]
-//    when(productFacade.syncData(productData.clock)).thenReturn()
+//    when(productSource.syncData(productData.clock)).thenReturn()
 
-    datahub.register(productFacade)
+    datahub.register(productSource)
     datahub.subscribe(product, subscriber, ProductOps.zero.clock)
 
     eventually {
-      verify(productFacade).syncData(productData.clock)
+      verify(productSource).syncData(productData.clock)
     }
 
     // Product entity data is updated
     datahub.dataUpdated(product)(newProductData)
 
     eventually {
-      verify(productFacade).syncData(productData.clock)
+      verify(productSource).syncData(productData.clock)
       verify(subscriber).onUpdate(product)(newProductData)
     }
   }

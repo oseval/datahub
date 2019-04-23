@@ -1,7 +1,6 @@
 package com.github.oseval.datahub.data
 
 import com.github.oseval.datahub.data.InferredOps.InferredOps
-import com.github.oseval.datahub.Entity
 
 /**
   * This wrapper intended to add the at-least-one delivery control ability to data.
@@ -12,11 +11,11 @@ import com.github.oseval.datahub.Entity
   * @tparam AO
   */
 object ALODataOps {
-  def apply[Dt <: Data](z: Dt)(implicit behavior: InferredOps.ImplicitClockBehavior[Dt#C]) =
+  def apply[Dt <: Data](z: Dt)(implicit behavior: InferredOps.ImplicitClockBehavior[Dt#C]): ALODataOps[InferredOps[Dt]] =
     new ALODataOps[InferredOps[Dt]] {
       override protected val ops = InferredOps(z)
     }
-  def apply[Ops <: DataOps](o: Ops) =
+  def apply[Ops <: DataOps](o: Ops): ALODataOps[Ops] =
     new ALODataOps[Ops] {
       override protected val ops: Ops = o
     }
@@ -30,24 +29,12 @@ trait ALODataOps[AO <: DataOps] extends DataOps {
   override lazy val ordering = ops.ordering
   override lazy val zero: ALOData[ops.D] = ALOData(ops.zero, ops.zero.clock, ops.zero.clock, None)
 
-  // TODO: can't be true if it is a partial data - for local storage only. Restrict access to it.
-  override def diffFromClock(a: ALOData[A], from: A#C): ALOData[A] =
-    if (a.isSolid)
-      ALOData(
-        ops.diffFromClock(a.data, from),
-        a.clock,
-        if (ordering.gteq(a.clock, from)) from else a.clock,
-        None
-      )
-    else
-      throw InvalidDataException("Diff can't be done on a partial data")
+  override def diffFromClock(a: ALOData[A], from: A#C): ALOData[A] = {
+    val res = ops.diffFromClock(a.data, from)
+    ALOData(res, res.clock, from, a.further.map(diffFromClock(_, from)))
+  }
 
-//  private def combineData: (Option[A], Option[A]) => Option[A] = {
-//    case (Some(f), Some(s)) => Some(ops.combine(f, s))
-//    case (Some(f), None) => Some(f)
-//    case (None, s) => s
-//  }
-  override def combine(a: D, b: D): D = {
+  override def merge(a: D, b: D): D = {
     val (first, second) =  if (ordering.gt(a.clock, b.clock)) (b, a) else (a, b)
 
 //    | --- | |---|
@@ -62,26 +49,26 @@ trait ALODataOps[AO <: DataOps] extends DataOps {
       if (ordering.gteq(first.previousClock, second.previousClock)) second
       else {
         val visible = ALOData[A](
-          data = ops.combine(first.data, second.data),
+          data = ops.merge(first.data, second.data),
           second.clock,
           first.previousClock
         )
 
         val further = (first.further, second.further) match {
-          case (Some(ff), Some(sf)) => Some(combine(ff, sf))
+          case (Some(ff), Some(sf)) => Some(merge(ff, sf))
           case (Some(ff), None) => Some(ff)
           case (None, Some(sf)) => Some(sf)
           case (None, None) => None
         }
 
-        further.map(combine(visible, _)).getOrElse(visible)
+        further.map(merge(visible, _)).getOrElse(visible)
       }
     } else // further
       ALOData(
-        ops.combine(first.data, second.data),
+        ops.merge(first.data, second.data),
         first.clock,
         first.previousClock,
-        first.further.map(combine(_, second)).orElse(Some(second))
+        first.further.map(merge(_, second)).orElse(Some(second))
       )
   }
 
