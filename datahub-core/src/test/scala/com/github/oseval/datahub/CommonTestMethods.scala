@@ -11,7 +11,7 @@ import com.github.oseval.datahub.remote.RemoteSubscriber.SubsOps
 import com.github.oseval.datahub.remote.{RemoteDatasourceConnector, RemoteSubscriber}
 import org.scalatest
 import com.github.oseval.datahub.domain.WarehouseTestData.{WarehouseEntity, WarehouseOps}
-import com.github.oseval.datahub.remote.RemoteDatasource.SubscriptionStorage
+import com.github.oseval.datahub.remote.RemoteDatasourceConnector.SubscriptionStorage
 
 import scala.concurrent.Future
 import scala.concurrent.duration._

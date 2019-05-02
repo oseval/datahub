@@ -3,7 +3,7 @@ package com.github.oseval.datahub.remote
 import java.util.concurrent.atomic.AtomicReference
 
 import com.github.oseval.datahub.data.Data
-import com.github.oseval.datahub.remote.RemoteDatasource.SubscriptionsManagement
+import com.github.oseval.datahub.remote.RemoteDatasourceConnector.SubscriptionsManagement
 import com.github.oseval.datahub.{Datahub, Entity, RemoteDatasource, Subscriber}
 import com.github.oseval.datahub.remote.RemoteSubscriber.{SubsData, SubsOps}
 
@@ -15,7 +15,7 @@ import scala.ref.WeakReference
   *
   * LocalSubscriber -> Datahub -> RemoteDatasource - - -> RemoteSubscriber -> Datahub -> LocalDatasource
   */
-object RemoteDatasource {
+object RemoteDatasourceConnector {
   trait SubscriptionStorage {
     /**
       * Compose data with a given update and persist it to storage

@@ -1,6 +1,6 @@
 name := "datahub"
 
-ThisBuild / version := "0.2.1-SNAPSHOT"
+ThisBuild / version := "0.3.0-SNAPSHOT"
 
 scalaVersion := "2.12.4"
 
@@ -24,13 +24,13 @@ val commonSettings = Seq(
 
 lazy val root = (project in file("."))
   .settings(publish := {}, publishLocal := {}, packagedArtifacts := Map.empty)
-  .aggregate(core, akka)
+  .aggregate(`datahub-core`, `datahub-akka`)
 
-lazy val core = (project in file("core")).settings(commonSettings)
+lazy val `datahub-core` = (project in file("datahub-core")).settings(commonSettings)
 
 val akkaVersion = "2.5.21"
 
-lazy val akka = (project in file("akka"))
+lazy val `datahub-akka` = (project in file("datahub-akka"))
   .settings(commonSettings :+ (
     libraryDependencies ++= Seq(
       "com.typesafe.akka" %% "akka-cluster-sharding" % akkaVersion,
@@ -38,6 +38,6 @@ lazy val akka = (project in file("akka"))
       "com.typesafe.akka" %% "akka-multi-node-testkit" % akkaVersion % Test
     )
   ))
-  .dependsOn(core)
+  .dependsOn(`datahub-core`)
   .enablePlugins(MultiJvmPlugin)
   .configs(MultiJvm)
